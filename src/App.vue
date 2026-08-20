@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 interface JournalEntry {
   id: number
   title: string
   content: string
-  date: string
+  createdAt: number
   updatedAt: number
+  favorite: boolean
 }
 
-const today = new Date()
+const STORAGE_KEY = 'journal-entries'
 
-const formatDate = (date: Date) => {
-  return date.toLocaleDateString('zh-CN', {
+const now = new Date()
+
+const formatDateLabel = (timestamp: number) => {
+  return new Date(timestamp).toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -20,40 +23,71 @@ const formatDate = (date: Date) => {
   })
 }
 
-const formatShortDate = (date: Date) => {
-  return date.toLocaleDateString('zh-CN', {
-    month: 'short',
+const formatListDate = (timestamp: number) => {
+  return new Date(timestamp).toLocaleDateString('zh-CN', {
+    month: 'long',
     day: 'numeric',
   })
 }
 
-const createDefaultEntry = (): JournalEntry => ({
-  id: Date.now(),
-  title: '',
-  content: '',
-  date: formatDate(today),
-  updatedAt: Date.now(),
-})
+const formatTime = (timestamp: number) => {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
-const savedEntries = localStorage.getItem('journal-entries')
+const isSameDay = (a: Date, b: Date) => {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+const getDayDifference = (timestamp: number) => {
+  const date = new Date(timestamp)
+  const current = new Date()
+
+  const startOfDay = (value: Date) =>
+    new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+
+  return Math.floor((startOfDay(current) - startOfDay(date)) / 86400000)
+}
+
+const createEntry = (): JournalEntry => {
+  const timestamp = Date.now()
+
+  return {
+    id: timestamp,
+    title: '',
+    content: '',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    favorite: false,
+  }
+}
+
+const initialEntry: JournalEntry = {
+  id: 1,
+  title: '欢迎来到 Journal',
+  content:
+    '这里是你的私人日记空间。\n\n记录今天发生的事情，写下此刻的想法，也可以慢慢记录那些值得留下来的生活片段。\n\nJournal 会陪你保存这些平凡而珍贵的时刻。',
+  createdAt: now.getTime(),
+  updatedAt: now.getTime(),
+  favorite: false,
+}
+
+const storedEntries = localStorage.getItem(STORAGE_KEY)
 
 const entries = ref<JournalEntry[]>(
-  savedEntries
-    ? JSON.parse(savedEntries)
-    : [
-        {
-          id: 1,
-          title: '欢迎来到 Journal',
-          content:
-            '这是你的第一篇日记。\n\n你可以在这里记录每天发生的事情、想法、照片和生活中的点点滴滴。\n\nJournal 会逐渐变成属于你的私人空间。',
-          date: formatDate(today),
-          updatedAt: Date.now(),
-        },
-      ],
+  storedEntries ? JSON.parse(storedEntries) : [initialEntry],
 )
 
-const selectedId = ref(entries.value[0]?.id ?? null)
+const selectedId = ref<number | null>(entries.value[0]?.id ?? null)
 const searchText = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
+const titleInput = ref<HTMLInputElement | null>(null)
 
 const selectedEntry = computed(() => {
   return entries.value.find((entry) => entry.id === selectedId.value) ?? null
@@ -62,35 +96,71 @@ const selectedEntry = computed(() => {
 const filteredEntries = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
 
+  const result = [...entries.value].sort((a, b) => b.updatedAt - a.updatedAt)
+
   if (!keyword) {
-    return entries.value
+    return result
   }
 
-  return entries.value.filter(
-    (entry) =>
+  return result.filter((entry) => {
+    return (
       entry.title.toLowerCase().includes(keyword) ||
-      entry.content.toLowerCase().includes(keyword),
-  )
+      entry.content.toLowerCase().includes(keyword)
+    )
+  })
 })
 
-const selectEntry = (id: number) => {
-  selectedId.value = id
+const todayEntries = computed(() => {
+  return filteredEntries.value.filter((entry) => getDayDifference(entry.updatedAt) === 0)
+})
+
+const yesterdayEntries = computed(() => {
+  return filteredEntries.value.filter((entry) => getDayDifference(entry.updatedAt) === 1)
+})
+
+const olderEntries = computed(() => {
+  return filteredEntries.value.filter((entry) => getDayDifference(entry.updatedAt) > 1)
+})
+
+const saveEntries = () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.value))
 }
 
-const createEntry = () => {
-  const entry = createDefaultEntry()
+watch(
+  entries,
+  () => {
+    saveEntries()
+  },
+  { deep: true },
+)
+
+const selectEntry = async (id: number) => {
+  selectedId.value = id
+
+  await nextTick()
+}
+
+const newEntry = async () => {
+  const entry = createEntry()
 
   entries.value.unshift(entry)
   selectedId.value = entry.id
+
+  await nextTick()
+
+  titleInput.value?.focus()
 }
 
 const deleteEntry = () => {
-  if (!selectedEntry.value) return
+  const current = selectedEntry.value
 
-  const deletedId = selectedEntry.value.id
-  const index = entries.value.findIndex((entry) => entry.id === deletedId)
+  if (!current) {
+    return
+  }
 
-  entries.value = entries.value.filter((entry) => entry.id !== deletedId)
+  const index = entries.value.findIndex((entry) => entry.id === current.id)
+
+  entries.value = entries.value.filter((entry) => entry.id !== current.id)
 
   if (entries.value.length === 0) {
     selectedId.value = null
@@ -105,157 +175,362 @@ const deleteEntry = () => {
   }
 }
 
-watch(
-  entries,
-  (value) => {
-    localStorage.setItem('journal-entries', JSON.stringify(value))
-  },
-  { deep: true },
-)
+const toggleFavorite = () => {
+  if (!selectedEntry.value) {
+    return
+  }
+
+  selectedEntry.value.favorite = !selectedEntry.value.favorite
+}
+
+const handleContentChange = () => {
+  if (!selectedEntry.value) {
+    return
+  }
+
+  selectedEntry.value.updatedAt = Date.now()
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  const modifier = event.ctrlKey || event.metaKey
+
+  if (!modifier) {
+    return
+  }
+
+  if (event.key.toLowerCase() === 'n') {
+    event.preventDefault()
+    newEntry()
+  }
+
+  if (event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    searchInput.value?.focus()
+  }
+
+  if (event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    saveEntries()
+  }
+
+  if (event.key === 'Escape' && document.activeElement === searchInput.value) {
+    searchText.value = ''
+    searchInput.value?.blur()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
   <div class="journal-app">
     <!-- 左侧导航 -->
     <aside class="sidebar">
-      <div class="app-title">
-        <div class="app-icon">J</div>
-        <div>
-          <div class="app-name">Journal</div>
-          <div class="app-subtitle">我的日记</div>
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="brand-mark">J</div>
+
+          <div class="brand-info">
+            <div class="brand-name">Journal</div>
+            <div class="brand-caption">私人日记</div>
+          </div>
         </div>
+
+        <button class="new-button" @click="newEntry">
+          <span class="new-button-icon">＋</span>
+          <span>新建日记</span>
+        </button>
+
+        <nav class="side-navigation">
+          <button class="side-item active">
+            <span class="side-icon">▤</span>
+            <span>所有日记</span>
+            <span class="side-count">{{ entries.length }}</span>
+          </button>
+
+          <button class="side-item">
+            <span class="side-icon">☆</span>
+            <span>收藏</span>
+          </button>
+
+          <button class="side-item">
+            <span class="side-icon">⌑</span>
+            <span>标签</span>
+          </button>
+
+          <button class="side-item">
+            <span class="side-icon">⌫</span>
+            <span>最近删除</span>
+          </button>
+        </nav>
       </div>
 
-      <button class="new-entry-button" @click="createEntry">
-        <span class="plus">＋</span>
-        新建日记
-      </button>
-
-      <nav class="navigation">
-        <div class="nav-item active">
-          <span class="nav-icon">▤</span>
-          <span>所有日记</span>
-          <span class="nav-count">{{ entries.length }}</span>
-        </div>
-
-        <div class="nav-item">
-          <span class="nav-icon">★</span>
-          <span>收藏</span>
-        </div>
-
-        <div class="nav-item">
-          <span class="nav-icon">▣</span>
-          <span>标签</span>
-        </div>
-
-        <div class="nav-item">
-          <span class="nav-icon">⌫</span>
-          <span>最近删除</span>
-        </div>
-      </nav>
-
       <div class="sidebar-bottom">
-        <div class="nav-item">
-          <span class="nav-icon">⚙</span>
+        <button class="side-item">
+          <span class="side-icon">⚙</span>
           <span>设置</span>
-        </div>
+        </button>
       </div>
     </aside>
 
-    <!-- 日记列表 -->
-    <section class="entry-list">
-      <div class="list-header">
+    <!-- 中间日记列表 -->
+    <section class="entry-panel">
+      <header class="entry-header">
         <div>
-          <h2>日记</h2>
-          <span>{{ entries.length }} 篇日记</span>
+          <h1>日记</h1>
+          <div class="entry-total">{{ entries.length }} 篇日记</div>
         </div>
 
-        <button class="small-new-button" title="新建日记" @click="createEntry">＋</button>
-      </div>
-
-      <div class="search-box">
-        <span>⌕</span>
-        <input v-model="searchText" type="text" placeholder="搜索日记" />
-        <kbd>Ctrl K</kbd>
-      </div>
-
-      <div class="entries">
-        <button
-          v-for="entry in filteredEntries"
-          :key="entry.id"
-          class="entry-item"
-          :class="{ selected: selectedId === entry.id }"
-          @click="selectEntry(entry.id)"
-        >
-          <div class="entry-date">
-            {{ formatShortDate(new Date(entry.updatedAt)) }}
-          </div>
-
-          <div class="entry-title">
-            {{ entry.title || '无标题' }}
-          </div>
-
-          <div class="entry-preview">
-            {{ entry.content.replace(/\n/g, ' ').slice(0, 70) || '暂无内容' }}
-          </div>
+        <button class="icon-button" title="新建日记" @click="newEntry">
+          ＋
         </button>
+      </header>
 
-        <div v-if="filteredEntries.length === 0" class="empty-search">
-          没有找到相关日记
+      <div class="search-container">
+        <div class="search-field">
+          <span class="search-icon">⌕</span>
+
+          <input
+            ref="searchInput"
+            v-model="searchText"
+            type="text"
+            placeholder="搜索"
+          />
+
+          <kbd v-if="!searchText">Ctrl K</kbd>
+
+          <button
+            v-else
+            class="clear-search"
+            title="清除搜索"
+            @click="searchText = ''"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div class="entry-scroll">
+        <!-- 今天 -->
+        <section v-if="todayEntries.length" class="entry-group">
+          <div class="group-title">今天</div>
+
+          <button
+            v-for="entry in todayEntries"
+            :key="entry.id"
+            class="entry-card"
+            :class="{ selected: selectedId === entry.id }"
+            @click="selectEntry(entry.id)"
+          >
+            <div class="entry-card-top">
+              <span class="entry-date">
+                {{ formatListDate(entry.updatedAt) }}
+              </span>
+
+              <span v-if="entry.favorite" class="favorite-mark">★</span>
+            </div>
+
+            <div class="entry-card-title">
+              {{ entry.title || '无标题' }}
+            </div>
+
+            <div class="entry-card-preview">
+              {{ entry.content.replace(/\n/g, ' ').slice(0, 82) || '暂无内容' }}
+            </div>
+          </button>
+        </section>
+
+        <!-- 昨天 -->
+        <section v-if="yesterdayEntries.length" class="entry-group">
+          <div class="group-title">昨天</div>
+
+          <button
+            v-for="entry in yesterdayEntries"
+            :key="entry.id"
+            class="entry-card"
+            :class="{ selected: selectedId === entry.id }"
+            @click="selectEntry(entry.id)"
+          >
+            <div class="entry-card-top">
+              <span class="entry-date">
+                {{ formatListDate(entry.updatedAt) }}
+              </span>
+
+              <span v-if="entry.favorite" class="favorite-mark">★</span>
+            </div>
+
+            <div class="entry-card-title">
+              {{ entry.title || '无标题' }}
+            </div>
+
+            <div class="entry-card-preview">
+              {{ entry.content.replace(/\n/g, ' ').slice(0, 82) || '暂无内容' }}
+            </div>
+          </button>
+        </section>
+
+        <!-- 更早 -->
+        <section v-if="olderEntries.length" class="entry-group">
+          <div class="group-title">更早</div>
+
+          <button
+            v-for="entry in olderEntries"
+            :key="entry.id"
+            class="entry-card"
+            :class="{ selected: selectedId === entry.id }"
+            @click="selectEntry(entry.id)"
+          >
+            <div class="entry-card-top">
+              <span class="entry-date">
+                {{ formatListDate(entry.updatedAt) }}
+              </span>
+
+              <span v-if="entry.favorite" class="favorite-mark">★</span>
+            </div>
+
+            <div class="entry-card-title">
+              {{ entry.title || '无标题' }}
+            </div>
+
+            <div class="entry-card-preview">
+              {{ entry.content.replace(/\n/g, ' ').slice(0, 82) || '暂无内容' }}
+            </div>
+          </button>
+        </section>
+
+        <div
+          v-if="filteredEntries.length === 0"
+          class="no-results"
+        >
+          <div class="no-results-icon">⌕</div>
+          <div>没有找到日记</div>
+          <small>试试其他搜索关键词</small>
         </div>
       </div>
     </section>
 
-    <!-- 编辑区域 -->
+    <!-- 编辑器 -->
     <main class="editor">
       <template v-if="selectedEntry">
-        <header class="editor-header">
-          <div class="editor-date">
-            {{ selectedEntry.date }}
+        <header class="editor-toolbar">
+          <div class="editor-toolbar-left">
+            <span class="saved-indicator">
+              <span class="saved-dot"></span>
+              已保存
+            </span>
           </div>
 
-          <div class="editor-actions">
-            <button title="收藏">☆</button>
-            <button title="删除" @click="deleteEntry">⌫</button>
-            <button title="更多">•••</button>
+          <div class="editor-toolbar-right">
+            <button
+              class="toolbar-button"
+              :class="{ favorite: selectedEntry.favorite }"
+              title="收藏"
+              @click="toggleFavorite"
+            >
+              {{ selectedEntry.favorite ? '★' : '☆' }}
+            </button>
+
+            <button
+              class="toolbar-button"
+              title="删除"
+              @click="deleteEntry"
+            >
+              ⌫
+            </button>
+
+            <button class="toolbar-button" title="更多">
+              •••
+            </button>
           </div>
         </header>
 
-        <article class="editor-content">
+        <article class="editor-document">
+          <div class="document-date">
+            {{ formatDateLabel(selectedEntry.updatedAt) }}
+          </div>
+
           <input
+            ref="titleInput"
             v-model="selectedEntry.title"
-            class="title-input"
+            class="document-title"
             type="text"
-            placeholder="日记标题"
+            placeholder="无标题"
+            @input="handleContentChange"
           />
 
           <textarea
             v-model="selectedEntry.content"
-            class="content-input"
+            class="document-body"
             placeholder="今天发生了什么？"
+            @input="handleContentChange"
           ></textarea>
-        </article>
 
-        <footer class="editor-footer">
-          <span>已自动保存</span>
-          <span>·</span>
-          <span>{{ selectedEntry.content.length }} 个字符</span>
-        </footer>
+          <div class="document-meta">
+            最后编辑于 {{ formatTime(selectedEntry.updatedAt) }}
+          </div>
+        </article>
       </template>
 
+      <!-- 没有选择日记 -->
       <div v-else class="empty-editor">
-        <div class="empty-icon">✎</div>
+        <div class="empty-editor-icon">✎</div>
+
         <h2>开始记录</h2>
-        <p>创建一篇新的日记，记录此刻的想法。</p>
-        <button class="empty-button" @click="createEntry">新建日记</button>
+
+        <p>
+          写下今天的故事，
+          <br />
+          留住那些值得记住的瞬间。
+        </p>
+
+        <button class="empty-editor-button" @click="newEntry">
+          新建日记
+        </button>
       </div>
     </main>
   </div>
 </template>
 
 <style scoped>
-* {
+:global(*) {
   box-sizing: border-box;
+}
+
+:global(html),
+:global(body),
+:global(#app) {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+:global(body) {
+  overflow: hidden;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    "Segoe UI",
+    "Microsoft YaHei",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  -webkit-app-region: no-drag;
 }
 
 .journal-app {
@@ -263,179 +538,206 @@ watch(
   height: 100vh;
   display: flex;
   overflow: hidden;
-  background: #f5f5f7;
   color: #1d1d1f;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #f5f5f7;
 }
 
-/* =========================
-   左侧导航
-========================= */
+/* ================================
+   左侧 Sidebar
+================================ */
 
 .sidebar {
-  width: 220px;
+  width: 224px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 24px 14px;
-  background: rgba(245, 245, 247, 0.92);
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  justify-content: space-between;
+  padding: 28px 13px 15px;
+  background: rgba(245, 245, 247, 0.94);
+  border-right: 1px solid rgba(0, 0, 0, 0.07);
 }
 
-.app-title {
+.brand {
   display: flex;
   align-items: center;
   gap: 11px;
   padding: 0 10px;
-  margin-bottom: 25px;
+  margin-bottom: 27px;
 }
 
-.app-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+.brand-mark {
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 10px;
   background: #1d1d1f;
-  color: white;
+  color: #fff;
   font-size: 20px;
   font-weight: 600;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
 }
 
-.app-name {
+.brand-name {
   font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.2px;
 }
 
-.app-subtitle {
+.brand-caption {
   margin-top: 2px;
-  color: #86868b;
-  font-size: 12px;
+  color: #8e8e93;
+  font-size: 11px;
 }
 
-.new-entry-button {
-  height: 40px;
+.new-button {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   border: none;
   border-radius: 10px;
   background: #1d1d1f;
-  color: white;
+  color: #fff;
   font-size: 14px;
   cursor: pointer;
-  transition: 0.2s;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  transition:
+    transform 0.15s,
+    background 0.15s;
 }
 
-.new-entry-button:hover {
+.new-button:hover {
   background: #333336;
 }
 
-.plus {
-  margin-right: 5px;
+.new-button:active {
+  transform: scale(0.98);
+}
+
+.new-button-icon {
   font-size: 18px;
+  line-height: 1;
 }
 
-.navigation {
-  margin-top: 18px;
+.side-navigation {
+  margin-top: 17px;
 }
 
-.nav-item {
+.side-item {
+  width: 100%;
   height: 40px;
   display: flex;
   align-items: center;
   gap: 11px;
   padding: 0 11px;
   margin-bottom: 3px;
+  border: none;
   border-radius: 9px;
-  color: #555;
-  font-size: 14px;
+  background: transparent;
+  color: #5f5f63;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
 }
 
-.nav-item.active {
+.side-item:hover {
+  background: rgba(0, 0, 0, 0.045);
+}
+
+.side-item.active {
   background: #e3e3e8;
   color: #1d1d1f;
   font-weight: 500;
 }
 
-.nav-icon {
+.side-icon {
   width: 18px;
-  text-align: center;
   color: #666;
+  text-align: center;
+  font-size: 15px;
 }
 
-.nav-count {
+.side-count {
   margin-left: auto;
   color: #999;
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.sidebar-bottom {
-  margin-top: auto;
-}
-
-/* =========================
+/* ================================
    日记列表
-========================= */
+================================ */
 
-.entry-list {
-  width: 290px;
+.entry-panel {
+  width: 310px;
   flex-shrink: 0;
-  background: #ffffff;
-  border-right: 1px solid #e5e5e7;
   display: flex;
   flex-direction: column;
+  background: #fff;
+  border-right: 1px solid #e5e5e7;
 }
 
-.list-header {
+.entry-header {
   height: 86px;
-  padding: 20px 18px 10px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 18px 18px 9px;
 }
 
-.list-header h2 {
+.entry-header h1 {
   margin: 0;
-  font-size: 24px;
-  letter-spacing: -0.5px;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.7px;
 }
 
-.list-header span {
-  display: block;
+.entry-total {
   margin-top: 4px;
   color: #8e8e93;
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.small-new-button {
+.icon-button {
   width: 34px;
   height: 34px;
   border: none;
   border-radius: 9px;
   background: #f2f2f7;
-  color: #1d1d1f;
-  font-size: 20px;
+  color: #333;
+  font-size: 19px;
   cursor: pointer;
 }
 
-.small-new-button:hover {
-  background: #e5e5ea;
+.icon-button:hover {
+  background: #e7e7ec;
 }
 
-.search-box {
+.search-container {
+  padding: 0 13px 11px;
+}
+
+.search-field {
   height: 34px;
   display: flex;
   align-items: center;
   gap: 7px;
-  margin: 4px 14px 12px;
   padding: 0 9px;
   border-radius: 8px;
   background: #f2f2f7;
-  color: #8e8e93;
 }
 
-.search-box input {
+.search-icon {
+  color: #8e8e93;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.search-field input {
   min-width: 0;
   flex: 1;
   border: none;
@@ -445,164 +747,249 @@ watch(
   font-size: 13px;
 }
 
-.search-box kbd {
+.search-field input::placeholder {
+  color: #9a9a9f;
+}
+
+.search-field kbd {
   color: #999;
   font-size: 9px;
+  white-space: nowrap;
 }
 
-.entries {
+.clear-search {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #b8b8bd;
+  color: white;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.entry-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 15px;
+  padding: 0 8px 20px;
 }
 
-.entry-item {
-  width: 100%;
-  padding: 13px 12px;
-  margin-bottom: 3px;
-  text-align: left;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  cursor: pointer;
-  color: #1d1d1f;
+.entry-scroll::-webkit-scrollbar {
+  width: 5px;
 }
 
-.entry-item:hover {
-  background: #f5f5f7;
+.entry-scroll::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background: #d2d2d7;
 }
 
-.entry-item.selected {
-  background: #e9e9ed;
+.entry-group {
+  margin-bottom: 17px;
 }
 
-.entry-date {
-  margin-bottom: 4px;
+.group-title {
+  padding: 6px 11px 7px;
   color: #8e8e93;
   font-size: 11px;
-}
-
-.entry-title {
-  margin-bottom: 4px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 14px;
   font-weight: 600;
 }
 
-.entry-preview {
-  overflow: hidden;
+.entry-card {
+  width: 100%;
+  display: block;
+  padding: 12px 12px 11px;
+  margin-bottom: 3px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entry-card:hover {
+  background: #f5f5f7;
+}
+
+.entry-card.selected {
+  background: #e8e8ed;
+}
+
+.entry-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.entry-date {
   color: #8e8e93;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 10px;
+}
+
+.favorite-mark {
+  color: #777;
+  font-size: 11px;
+}
+
+.entry-card-title {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.empty-search {
-  padding: 30px 10px;
-  text-align: center;
-  color: #999;
-  font-size: 13px;
+.entry-card-preview {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #8e8e93;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* =========================
-   编辑区域
-========================= */
+.no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 75px;
+  color: #777;
+  font-size: 13px;
+  text-align: center;
+}
+
+.no-results-icon {
+  margin-bottom: 12px;
+  color: #aaa;
+  font-size: 28px;
+}
+
+.no-results small {
+  margin-top: 5px;
+  color: #aaa;
+  font-size: 11px;
+}
+
+/* ================================
+   编辑器
+================================ */
 
 .editor {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: #fff;
 }
 
-.editor-header {
-  height: 70px;
+.editor-toolbar {
+  height: 62px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 34px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0 27px;
+  border-bottom: 1px solid #f0f0f2;
 }
 
-.editor-date {
-  color: #8e8e93;
-  font-size: 13px;
-}
-
-.editor-actions {
+.saved-indicator {
   display: flex;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
+  color: #999;
+  font-size: 10px;
 }
 
-.editor-actions button {
+.saved-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b7b7bd;
+}
+
+.editor-toolbar-right {
+  display: flex;
+  gap: 3px;
+}
+
+.toolbar-button {
   width: 34px;
   height: 34px;
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #666;
-  font-size: 17px;
+  color: #6d6d72;
+  font-size: 16px;
   cursor: pointer;
 }
 
-.editor-actions button:hover {
+.toolbar-button:hover {
   background: #f2f2f7;
 }
 
-.editor-content {
-  width: min(850px, calc(100% - 100px));
-  flex: 1;
-  margin: 0 auto;
-  padding: 70px 0 30px;
+.toolbar-button.favorite {
+  color: #555;
 }
 
-.title-input {
+.editor-document {
+  width: min(860px, calc(100% - 120px));
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: 58px 0 24px;
+}
+
+.document-date {
+  margin-bottom: 17px;
+  color: #8e8e93;
+  font-size: 12px;
+}
+
+.document-title {
   width: 100%;
+  padding: 0;
   border: none;
   outline: none;
   background: transparent;
   color: #1d1d1f;
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -1px;
+  letter-spacing: -1.3px;
 }
 
-.title-input::placeholder {
+.document-title::placeholder {
   color: #d1d1d6;
 }
 
-.content-input {
+.document-body {
   width: 100%;
-  height: calc(100% - 70px);
-  margin-top: 25px;
+  flex: 1;
+  min-height: 250px;
+  margin-top: 27px;
+  padding: 0;
   resize: none;
   border: none;
   outline: none;
   background: transparent;
-  color: #333;
+  color: #343437;
   font-family: inherit;
   font-size: 16px;
-  line-height: 1.9;
+  line-height: 1.95;
 }
 
-.content-input::placeholder {
-  color: #b0b0b5;
+.document-body::placeholder {
+  color: #b7b7bc;
 }
 
-.editor-footer {
-  height: 38px;
-  flex-shrink: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  color: #aaa;
-  font-size: 11px;
+.document-meta {
+  padding-top: 15px;
+  color: #b1b1b6;
+  font-size: 10px;
+  text-align: center;
 }
 
 .empty-editor {
@@ -611,37 +998,98 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #888;
+  text-align: center;
 }
 
-.empty-icon {
-  width: 65px;
-  height: 65px;
+.empty-editor-icon {
+  width: 68px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
-  border-radius: 16px;
+  margin-bottom: 18px;
+  border-radius: 17px;
   background: #f2f2f7;
+  color: #777;
   font-size: 30px;
 }
 
 .empty-editor h2 {
-  margin: 0 0 8px;
+  margin: 0;
   color: #333;
+  font-size: 21px;
 }
 
 .empty-editor p {
-  margin: 0 0 20px;
-  font-size: 14px;
+  margin: 10px 0 20px;
+  color: #999;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
-.empty-button {
-  padding: 9px 18px;
+.empty-editor-button {
+  height: 36px;
+  padding: 0 17px;
   border: none;
   border-radius: 9px;
   background: #1d1d1f;
-  color: white;
+  color: #fff;
+  font-size: 13px;
   cursor: pointer;
+}
+
+.empty-editor-button:hover {
+  background: #333336;
+}
+
+/* ================================
+   窗口尺寸较小时
+================================ */
+
+@media (max-width: 1000px) {
+  .sidebar {
+    width: 190px;
+  }
+
+  .entry-panel {
+    width: 270px;
+  }
+
+  .editor-document {
+    width: calc(100% - 70px);
+  }
+}
+
+@media (max-width: 800px) {
+  .sidebar {
+    width: 65px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .brand-info,
+  .new-button span:last-child,
+  .side-item span:not(.side-icon),
+  .side-count {
+    display: none;
+  }
+
+  .brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .new-button {
+    justify-content: center;
+  }
+
+  .side-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .entry-panel {
+    width: 260px;
+  }
 }
 </style>
