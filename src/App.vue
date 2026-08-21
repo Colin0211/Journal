@@ -14,6 +14,35 @@ const STORAGE_KEY = 'journal-entries'
 
 const now = new Date()
 
+//测试sqlite
+const test = async () => {
+  console.log('① 测试按钮被点击')
+
+  try {
+    console.log('② 准备调用 Electron IPC')
+
+    const journal = await window.electronAPI.createJournal({
+      title: '测试日记',
+      content: '这是一条 SQLite 测试数据。',
+    })
+
+    console.log('③ SQLite 返回成功：', journal)
+  } catch (error) {
+    console.error('④ SQLite 调用失败：', error)
+  }
+}
+
+//测试读取
+const testListSQLite = async () => {
+  try {
+    const journals = await window.electronAPI.listJournals()
+
+    console.log('SQLite 日记列表：', journals)
+  } catch (error) {
+    console.error('读取 SQLite 失败：', error)
+  }
+}
+
 const formatDateLabel = (timestamp: number) => {
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -55,16 +84,50 @@ const getDayDifference = (timestamp: number) => {
   return Math.floor((startOfDay(current) - startOfDay(date)) / 86400000)
 }
 
-const createEntry = (): JournalEntry => {
-  const timestamp = Date.now()
-
-  return {
-    id: timestamp,
+const createEntry = async (): Promise<JournalEntry> => {
+  const journal = await window.electronAPI.createJournal({
     title: '',
     content: '',
-    createdAt: timestamp,
-    updatedAt: timestamp,
+  })
+
+  return {
+    id: journal.id,
+    title: journal.title,
+    content: journal.content,
+    createdAt: new Date(journal.created_at).getTime(),
+    updatedAt: new Date(journal.updated_at).getTime(),
     favorite: false,
+  }
+}
+
+//SQLite 数据转换函数
+function convertJournal(journal: {
+  id: number
+  title: string
+  content: string
+  created_at: string
+  updated_at: string
+}): JournalEntry {
+  return {
+    id: journal.id,
+    title: journal.title,
+    content: journal.content,
+    createdAt: new Date(journal.created_at).getTime(),
+    updatedAt: new Date(journal.updated_at).getTime(),
+    favorite: false,
+  }
+}
+
+// 从 SQLite 加载日记
+async function loadJournalsFromSQLite() {
+  try {
+    const journals = await window.electronAPI.listJournals()
+
+    entries.value = journals.map(convertJournal)
+
+    console.log('SQLite 日记加载成功：', entries.value)
+  } catch (error) {
+    console.error('加载 SQLite 日记失败：', error)
   }
 }
 
@@ -141,7 +204,7 @@ const selectEntry = async (id: number) => {
 }
 
 const newEntry = async () => {
-  const entry = createEntry()
+  const entry = await createEntry()
 
   entries.value.unshift(entry)
   selectedId.value = entry.id
@@ -219,8 +282,12 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
+
+  await loadJournalsFromSQLite()
+
+  selectedId.value = entries.value[0]?.id ?? null
 })
 
 onUnmounted(() => {
@@ -271,6 +338,14 @@ onUnmounted(() => {
         </nav>
       </div>
 
+      <button @click="test">
+        测试 SQLite
+      </button>
+
+      <button @click="testListSQLite">
+        测试读取 SQLite
+      </button>
+
       <div class="sidebar-bottom">
         <button class="side-item">
           <span class="side-icon">⚙</span>
@@ -296,21 +371,11 @@ onUnmounted(() => {
         <div class="search-field">
           <span class="search-icon">⌕</span>
 
-          <input
-            ref="searchInput"
-            v-model="searchText"
-            type="text"
-            placeholder="搜索"
-          />
+          <input ref="searchInput" v-model="searchText" type="text" placeholder="搜索" />
 
           <kbd v-if="!searchText">Ctrl K</kbd>
 
-          <button
-            v-else
-            class="clear-search"
-            title="清除搜索"
-            @click="searchText = ''"
-          >
+          <button v-else class="clear-search" title="清除搜索" @click="searchText = ''">
             ×
           </button>
         </div>
@@ -321,13 +386,8 @@ onUnmounted(() => {
         <section v-if="todayEntries.length" class="entry-group">
           <div class="group-title">今天</div>
 
-          <button
-            v-for="entry in todayEntries"
-            :key="entry.id"
-            class="entry-card"
-            :class="{ selected: selectedId === entry.id }"
-            @click="selectEntry(entry.id)"
-          >
+          <button v-for="entry in todayEntries" :key="entry.id" class="entry-card"
+            :class="{ selected: selectedId === entry.id }" @click="selectEntry(entry.id)">
             <div class="entry-card-top">
               <span class="entry-date">
                 {{ formatListDate(entry.updatedAt) }}
@@ -350,13 +410,8 @@ onUnmounted(() => {
         <section v-if="yesterdayEntries.length" class="entry-group">
           <div class="group-title">昨天</div>
 
-          <button
-            v-for="entry in yesterdayEntries"
-            :key="entry.id"
-            class="entry-card"
-            :class="{ selected: selectedId === entry.id }"
-            @click="selectEntry(entry.id)"
-          >
+          <button v-for="entry in yesterdayEntries" :key="entry.id" class="entry-card"
+            :class="{ selected: selectedId === entry.id }" @click="selectEntry(entry.id)">
             <div class="entry-card-top">
               <span class="entry-date">
                 {{ formatListDate(entry.updatedAt) }}
@@ -379,13 +434,8 @@ onUnmounted(() => {
         <section v-if="olderEntries.length" class="entry-group">
           <div class="group-title">更早</div>
 
-          <button
-            v-for="entry in olderEntries"
-            :key="entry.id"
-            class="entry-card"
-            :class="{ selected: selectedId === entry.id }"
-            @click="selectEntry(entry.id)"
-          >
+          <button v-for="entry in olderEntries" :key="entry.id" class="entry-card"
+            :class="{ selected: selectedId === entry.id }" @click="selectEntry(entry.id)">
             <div class="entry-card-top">
               <span class="entry-date">
                 {{ formatListDate(entry.updatedAt) }}
@@ -404,10 +454,7 @@ onUnmounted(() => {
           </button>
         </section>
 
-        <div
-          v-if="filteredEntries.length === 0"
-          class="no-results"
-        >
+        <div v-if="filteredEntries.length === 0" class="no-results">
           <div class="no-results-icon">⌕</div>
           <div>没有找到日记</div>
           <small>试试其他搜索关键词</small>
@@ -427,20 +474,12 @@ onUnmounted(() => {
           </div>
 
           <div class="editor-toolbar-right">
-            <button
-              class="toolbar-button"
-              :class="{ favorite: selectedEntry.favorite }"
-              title="收藏"
-              @click="toggleFavorite"
-            >
+            <button class="toolbar-button" :class="{ favorite: selectedEntry.favorite }" title="收藏"
+              @click="toggleFavorite">
               {{ selectedEntry.favorite ? '★' : '☆' }}
             </button>
 
-            <button
-              class="toolbar-button"
-              title="删除"
-              @click="deleteEntry"
-            >
+            <button class="toolbar-button" title="删除" @click="deleteEntry">
               ⌫
             </button>
 
@@ -455,21 +494,11 @@ onUnmounted(() => {
             {{ formatDateLabel(selectedEntry.updatedAt) }}
           </div>
 
-          <input
-            ref="titleInput"
-            v-model="selectedEntry.title"
-            class="document-title"
-            type="text"
-            placeholder="无标题"
-            @input="handleContentChange"
-          />
+          <input ref="titleInput" v-model="selectedEntry.title" class="document-title" type="text" placeholder="无标题"
+            @input="handleContentChange" />
 
-          <textarea
-            v-model="selectedEntry.content"
-            class="document-body"
-            placeholder="今天发生了什么？"
-            @input="handleContentChange"
-          ></textarea>
+          <textarea v-model="selectedEntry.content" class="document-body" placeholder="今天发生了什么？"
+            @input="handleContentChange"></textarea>
 
           <div class="document-meta">
             最后编辑于 {{ formatTime(selectedEntry.updatedAt) }}
