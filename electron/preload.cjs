@@ -19,4 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 updateJournal: (id, data) => {
   return ipcRenderer.invoke('journal:update', id, data)
 },
+
+  // 删除日记
+  deleteJournal: (id) => {
+    return ipcRenderer.invoke('journal:delete', id)
+  },
 })

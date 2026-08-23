@@ -30,6 +30,13 @@ declare global {
         success: boolean
         updated_at: string
       }>
+
+      deleteJournal(
+        id: number,
+      ): Promise<{
+        success: boolean
+      }>
+
     }
   }
 }

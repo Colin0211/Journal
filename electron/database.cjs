@@ -83,9 +83,26 @@ function updateJournal(id, data) {
   }
 }
 
+// 删除日记
+function deleteJournal(id) {
+  const db = getDatabase()
+
+  const stmt = db.prepare(`
+    DELETE FROM journals
+    WHERE id = ?
+  `)
+
+  const result = stmt.run(id)
+
+  return {
+    success: result.changes > 0,
+  }
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
   getAllJournals,
   updateJournal,
+  deleteJournal,
 }

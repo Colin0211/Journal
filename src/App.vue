@@ -206,22 +206,41 @@ const newEntry = async () => {
   titleInput.value?.focus()
 }
 
-const deleteEntry = () => {
+// 删除当前选中的日记
+const deleteEntry = async () => {
   const current = selectedEntry.value
 
   if (!current) {
     return
   }
 
+  // 先从 SQLite 删除
+  try {
+    const result = await window.electronAPI.deleteJournal(current.id)
+
+    if (!result.success) {
+      console.error('SQLite 删除失败：没有找到对应日记')
+      return
+    }
+  } catch (error) {
+    console.error('SQLite 删除失败：', error)
+    return
+  }
+
+  // SQLite 删除成功后，再更新 Vue 列表
   const index = entries.value.findIndex((entry) => entry.id === current.id)
 
-  entries.value = entries.value.filter((entry) => entry.id !== current.id)
+  entries.value = entries.value.filter(
+    (entry) => entry.id !== current.id,
+  )
 
+  // 删除后已经没有日记
   if (entries.value.length === 0) {
     selectedId.value = null
     return
   }
 
+  // 删除后选择相邻的日记
   const nextIndex = Math.min(index, entries.value.length - 1)
   const nextEntry = entries.value[nextIndex]
 
