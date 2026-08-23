@@ -9,19 +9,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createJournal: (data) => {
     return ipcRenderer.invoke('journal:create', data)
   },
-  
-   // 获取全部日记
+
+  // 获取全部日记
   listJournals: () => {
     return ipcRenderer.invoke('journal:list')
   },
 
   // 更新日记
-updateJournal: (id, data) => {
-  return ipcRenderer.invoke('journal:update', id, data)
-},
+  updateJournal: (id, data) => {
+    return ipcRenderer.invoke('journal:update', id, data)
+  },
 
   // 删除日记
   deleteJournal: (id) => {
     return ipcRenderer.invoke('journal:delete', id)
+  },
+
+  // 切换收藏状态
+  toggleFavorite: (id) => {
+    return ipcRenderer.invoke('journal:toggleFavorite', id)
   },
 })

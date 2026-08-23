@@ -25,6 +25,24 @@ function initDatabase() {
     )
   `)
 
+  // 给已有数据库添加 favorite 字段
+  const columns = db
+    .prepare(`PRAGMA table_info(journals)`)
+    .all()
+
+  const hasFavorite = columns.some(
+    (column) => column.name === 'favorite',
+  )
+
+  if (!hasFavorite) {
+    db.exec(`
+    ALTER TABLE journals
+    ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0
+  `)
+
+    console.log('SQLite: added favorite column')
+  }
+
   console.log('SQLite database:', dbPath)
 }
 
@@ -47,7 +65,8 @@ function getAllJournals() {
       title,
       content,
       created_at,
-      updated_at
+      updated_at,
+      favorite
     FROM journals
     ORDER BY updated_at DESC
   `)
@@ -99,10 +118,46 @@ function deleteJournal(id) {
   }
 }
 
+//收藏日记
+function toggleFavorite(id) {
+  const db = getDatabase()
+
+  const stmt = db.prepare(`
+    UPDATE journals
+    SET favorite = CASE
+      WHEN favorite = 0 THEN 1
+      ELSE 0
+    END
+    WHERE id = ?
+  `)
+
+  const result = stmt.run(id)
+
+  if (result.changes === 0) {
+    return {
+      success: false,
+    }
+  }
+
+  const row = db
+    .prepare(`
+      SELECT favorite
+      FROM journals
+      WHERE id = ?
+    `)
+    .get(id)
+
+  return {
+    success: true,
+    favorite: Boolean(row.favorite),
+  }
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
   getAllJournals,
   updateJournal,
   deleteJournal,
+  toggleFavorite,
 }

@@ -11,6 +11,7 @@ interface Journal {
   content: string
   created_at: string
   updated_at: string
+  favorite: number
 }
 
 declare global {
@@ -37,6 +38,12 @@ declare global {
         success: boolean
       }>
 
+      toggleFavorite(
+        id: number,
+      ): Promise<{
+        success: boolean
+        favorite?: boolean
+      }>
     }
   }
 }

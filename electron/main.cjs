@@ -8,6 +8,7 @@ const {
   getAllJournals,
   updateJournal,
   deleteJournal,
+  toggleFavorite,
 } = require('./database.cjs')
 
 // Node.js 路径模块
@@ -101,6 +102,11 @@ ipcMain.handle('journal:update', (_event, id, data) => {
 // 删除日记
 ipcMain.handle('journal:delete', (_event, id) => {
   return deleteJournal(id)
+})
+
+// 切换收藏状态
+ipcMain.handle('journal:toggleFavorite', (_event, id) => {
+  return toggleFavorite(id)
 })
 
 // Electron 启动

@@ -10,8 +10,6 @@ interface JournalEntry {
   favorite: boolean
 }
 
-const STORAGE_KEY = 'journal-entries'
-
 const now = new Date()
 
 //测试sqlite
@@ -43,6 +41,7 @@ const testListSQLite = async () => {
   }
 }
 
+// 格式化时间为 "YYYY年MM月DD日 星期X" 的字符串
 const formatDateLabel = (timestamp: number) => {
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -52,6 +51,7 @@ const formatDateLabel = (timestamp: number) => {
   })
 }
 
+// 格式化时间为 "月 日" 的字符串
 const formatListDate = (timestamp: number) => {
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     month: 'long',
@@ -59,6 +59,7 @@ const formatListDate = (timestamp: number) => {
   })
 }
 
+// 格式化时间为 "HH:MM" 的字符串
 const formatTime = (timestamp: number) => {
   return new Date(timestamp).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -66,6 +67,7 @@ const formatTime = (timestamp: number) => {
   })
 }
 
+// 判断两个日期是否是同一天
 const isSameDay = (a: Date, b: Date) => {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -74,6 +76,7 @@ const isSameDay = (a: Date, b: Date) => {
   )
 }
 
+// 计算两个时间戳之间的天数差
 const getDayDifference = (timestamp: number) => {
   const date = new Date(timestamp)
   const current = new Date()
@@ -84,6 +87,7 @@ const getDayDifference = (timestamp: number) => {
   return Math.floor((startOfDay(current) - startOfDay(date)) / 86400000)
 }
 
+// 创建数据库记录
 const createEntry = async (): Promise<JournalEntry> => {
   const journal = await window.electronAPI.createJournal({
     title: '',
@@ -107,6 +111,7 @@ function convertJournal(journal: {
   content: string
   created_at: string
   updated_at: string
+  favorite: number
 }): JournalEntry {
   return {
     id: journal.id,
@@ -114,7 +119,7 @@ function convertJournal(journal: {
     content: journal.content,
     createdAt: new Date(journal.created_at).getTime(),
     updatedAt: new Date(journal.updated_at).getTime(),
-    favorite: false,
+    favorite: Boolean(journal.favorite),
   }
 }
 
@@ -131,31 +136,27 @@ async function loadJournalsFromSQLite() {
   }
 }
 
-const initialEntry: JournalEntry = {
-  id: 1,
-  title: '欢迎来到 Journal',
-  content:
-    '这里是你的私人日记空间。\n\n记录今天发生的事情，写下此刻的想法，也可以慢慢记录那些值得留下来的生活片段。\n\nJournal 会陪你保存这些平凡而珍贵的时刻。',
-  createdAt: now.getTime(),
-  updatedAt: now.getTime(),
-  favorite: false,
-}
+// Vue 响应式数据
+const entries = ref<JournalEntry[]>([])
 
-const storedEntries = localStorage.getItem(STORAGE_KEY)
+// 当前选中的日记 ID
+const selectedId = ref<number | null>(null)
 
-const entries = ref<JournalEntry[]>(
-  storedEntries ? JSON.parse(storedEntries) : [initialEntry],
-)
-
-const selectedId = ref<number | null>(entries.value[0]?.id ?? null)
+// 搜索关键词
 const searchText = ref('')
+
+// 输入框引用
 const searchInput = ref<HTMLInputElement | null>(null)
+
+// 标题输入框引用,新建日记后自动进入标题输入框
 const titleInput = ref<HTMLInputElement | null>(null)
 
+// 计算属性：当前选中的日记
 const selectedEntry = computed(() => {
   return entries.value.find((entry) => entry.id === selectedId.value) ?? null
 })
 
+// 计算属性：根据搜索关键词过滤日记列表，并按更新时间降序排序
 const filteredEntries = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
 
@@ -173,28 +174,31 @@ const filteredEntries = computed(() => {
   })
 })
 
+// 计算属性：将过滤后的日记按时间分组为今天、昨天和更早
 const todayEntries = computed(() => {
   return filteredEntries.value.filter((entry) => getDayDifference(entry.updatedAt) === 0)
 })
 
+// 计算属性：昨天的日记
 const yesterdayEntries = computed(() => {
   return filteredEntries.value.filter((entry) => getDayDifference(entry.updatedAt) === 1)
 })
 
+// 计算属性：更早的日记
 const olderEntries = computed(() => {
   return filteredEntries.value.filter((entry) => getDayDifference(entry.updatedAt) > 1)
 })
 
-const saveEntries = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.value))
-}
-
+// 选择某篇日记
 const selectEntry = async (id: number) => {
   selectedId.value = id
 
   await nextTick()
 }
 
+
+
+// 新建日记
 const newEntry = async () => {
   const entry = await createEntry()
 
@@ -249,14 +253,30 @@ const deleteEntry = async () => {
   }
 }
 
-const toggleFavorite = () => {
-  if (!selectedEntry.value) {
+// 切换当前选中日记的收藏状态
+const toggleFavorite = async () => {
+  const current = selectedEntry.value
+
+  if (!current) {
     return
   }
 
-  selectedEntry.value.favorite = !selectedEntry.value.favorite
+  try {
+    const result = await window.electronAPI.toggleFavorite(current.id)
+
+    if (!result.success || result.favorite === undefined) {
+      console.error('SQLite 收藏状态更新失败')
+      return
+    }
+
+    // SQLite 更新成功后，再更新 Vue
+    current.favorite = result.favorite
+  } catch (error) {
+    console.error('更新收藏状态失败：', error)
+  }
 }
 
+// 内容变化时，更新 updatedAt 并触发保存
 const handleContentChange = () => {
   if (!selectedEntry.value) {
     return
@@ -302,6 +322,7 @@ const scheduleSave = () => {
   }, 500)
 }
 
+// 处理键盘快捷键
 const handleKeydown = (event: KeyboardEvent) => {
   const modifier = event.ctrlKey || event.metaKey
 
@@ -336,6 +357,7 @@ if (event.key.toLowerCase() === 's') {
   }
 }
 
+// 组件挂载时，加载 SQLite 日记并设置键盘事件监听
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
 
@@ -344,6 +366,7 @@ onMounted(async () => {
   selectedId.value = entries.value[0]?.id ?? null
 })
 
+// 组件卸载时，移除键盘事件监听和清理定时器
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 
