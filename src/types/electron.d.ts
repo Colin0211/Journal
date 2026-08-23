@@ -1,4 +1,4 @@
-export {}
+export { }
 
 interface JournalData {
   title: string
@@ -18,8 +18,18 @@ declare global {
     electronAPI: {
       createJournal(data: JournalData): Promise<Journal>
 
-        listJournals(): Promise<Journal[]>
+      listJournals(): Promise<Journal[]>
 
+      updateJournal(
+        id: number,
+        data: {
+          title: string
+          content: string
+        },
+      ): Promise<{
+        success: boolean
+        updated_at: string
+      }>
     }
   }
 }

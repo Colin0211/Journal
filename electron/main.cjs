@@ -6,6 +6,7 @@ const {
   initDatabase,
   getDatabase,
   getAllJournals,
+  updateJournal,
 } = require('./database.cjs')
 
 // Node.js 路径模块
@@ -89,6 +90,11 @@ ipcMain.handle('journal:create', (_event, data) => {
 // 获取所有日记
 ipcMain.handle('journal:list', () => {
   return getAllJournals()
+})
+
+// 更新日记
+ipcMain.handle('journal:update', (_event, id, data) => {
+  return updateJournal(id, data)
 })
 
 // Electron 启动

@@ -55,8 +55,37 @@ function getAllJournals() {
   return stmt.all()
 }
 
+// 更新日记
+function updateJournal(id, data) {
+  const db = getDatabase()
+
+  const now = new Date().toISOString()
+
+  const stmt = db.prepare(`
+    UPDATE journals
+    SET
+      title = ?,
+      content = ?,
+      updated_at = ?
+    WHERE id = ?
+  `)
+
+  const result = stmt.run(
+    data.title ?? '',
+    data.content ?? '',
+    now,
+    id,
+  )
+
+  return {
+    success: result.changes > 0,
+    updated_at: now,
+  }
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
   getAllJournals,
+  updateJournal,
 }

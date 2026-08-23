@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, } from 'vue'
 
 interface JournalEntry {
   id: number
@@ -189,14 +189,6 @@ const saveEntries = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.value))
 }
 
-watch(
-  entries,
-  () => {
-    saveEntries()
-  },
-  { deep: true },
-)
-
 const selectEntry = async (id: number) => {
   selectedId.value = id
 
@@ -252,6 +244,43 @@ const handleContentChange = () => {
   }
 
   selectedEntry.value.updatedAt = Date.now()
+
+  scheduleSave()
+}
+
+//500ms防抖自动保存函数
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+const saveCurrentEntryToSQLite = () => {
+  if (!selectedEntry.value) {
+    return
+  }
+
+  const entry = selectedEntry.value
+
+  window.electronAPI
+    .updateJournal(entry.id, {
+      title: entry.title,
+      content: entry.content,
+    })
+    .then((result) => {
+      if (result.success) {
+        entry.updatedAt = new Date(result.updated_at).getTime()
+      }
+    })
+    .catch((error) => {
+      console.error('保存日记到 SQLite 失败：', error)
+    })
+}
+
+const scheduleSave = () => {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+  }
+
+  saveTimer = setTimeout(() => {
+    saveCurrentEntryToSQLite()
+  }, 500)
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -271,10 +300,16 @@ const handleKeydown = (event: KeyboardEvent) => {
     searchInput.value?.focus()
   }
 
-  if (event.key.toLowerCase() === 's') {
-    event.preventDefault()
-    saveEntries()
+  //Ctrl + S = 立即保存 SQLite
+if (event.key.toLowerCase() === 's') {
+  event.preventDefault()
+
+  if (saveTimer) {
+    clearTimeout(saveTimer)
   }
+
+  saveCurrentEntryToSQLite()
+}
 
   if (event.key === 'Escape' && document.activeElement === searchInput.value) {
     searchText.value = ''
@@ -292,6 +327,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+  }
 })
 </script>
 
