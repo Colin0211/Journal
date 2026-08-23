@@ -23,36 +23,6 @@ const {
   olderEntries,
 } = useJournal()
 
-
-//测试sqlite
-const test = async () => {
-  console.log('① 测试按钮被点击')
-
-  try {
-    console.log('② 准备调用 Electron IPC')
-
-    const journal = await window.electronAPI.createJournal({
-      title: '测试日记',
-      content: '这是一条 SQLite 测试数据。',
-    })
-
-    console.log('③ SQLite 返回成功：', journal)
-  } catch (error) {
-    console.error('④ SQLite 调用失败：', error)
-  }
-}
-
-//测试读取
-const testListSQLite = async () => {
-  try {
-    const journals = await window.electronAPI.listJournals()
-
-    console.log('SQLite 日记列表：', journals)
-  } catch (error) {
-    console.error('读取 SQLite 失败：', error)
-  }
-}
-
 const editorRef = ref<InstanceType<typeof Editor> | null>(null)
 
 // 搜索关键词
@@ -114,7 +84,6 @@ onMounted(async () => {
 
     <!-- 侧边栏 -->
     <Sidebar :entry-count="entries.length" :show-favorites-only="showFavoritesOnly" @new-entry="newEntry"
-      @test-s-q-lite="test" @test-list-s-q-lite="testListSQLite"
       @filter-change="showFavoritesOnly = $event === 'favorites'" />
 
     <!-- 中间日记列表 -->

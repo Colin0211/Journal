@@ -28,7 +28,7 @@ const emit = defineEmits<{
         <span class="new-button-icon">＋</span>
         <span>新建日记</span>
       </button>
-      
+
       <nav class="side-navigation">
         <button class="side-item" :class="{ active: !showFavoritesOnly }" @click="emit('filterChange', 'all')">
           <span class="side-icon">▤</span>
@@ -52,16 +52,6 @@ const emit = defineEmits<{
         </button>
       </nav>
     </div>
-
-    <!-- SQLite 测试按钮，后面正式完成后可以删除 -->
-    <button @click="emit('testSQLite')">
-      测试 SQLite
-    </button>
-
-    <button @click="emit('testListSQLite')">
-      测试读取 SQLite
-    </button>
-
     <div class="sidebar-bottom">
       <button class="side-item">
         <span class="side-icon">⚙</span>
