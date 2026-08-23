@@ -24,16 +24,13 @@ function initDatabase() {
       updated_at TEXT NOT NULL
     )
   `)
-
   // 给已有数据库添加 favorite 字段
   const columns = db
     .prepare(`PRAGMA table_info(journals)`)
     .all()
-
   const hasFavorite = columns.some(
     (column) => column.name === 'favorite',
   )
-
   if (!hasFavorite) {
     db.exec(`
     ALTER TABLE journals
@@ -42,7 +39,6 @@ function initDatabase() {
 
     console.log('SQLite: added favorite column')
   }
-
   console.log('SQLite database:', dbPath)
 }
 
