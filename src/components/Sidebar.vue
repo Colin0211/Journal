@@ -1,12 +1,14 @@
 <script setup lang="ts">
 defineProps<{
   entryCount: number
+  showFavoritesOnly: boolean
 }>()
 
 const emit = defineEmits<{
   newEntry: []
   testSQLite: []
   testListSQLite: []
+  filterChange: [filter: 'all' | 'favorites']
 }>()
 </script>
 
@@ -22,22 +24,19 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <button
-        class="new-button"
-        @click="emit('newEntry')"
-      >
+      <button class="new-button" @click="emit('newEntry')">
         <span class="new-button-icon">＋</span>
         <span>新建日记</span>
       </button>
-
+      
       <nav class="side-navigation">
-        <button class="side-item active">
+        <button class="side-item" :class="{ active: !showFavoritesOnly }" @click="emit('filterChange', 'all')">
           <span class="side-icon">▤</span>
           <span>所有日记</span>
           <span class="side-count">{{ entryCount }}</span>
         </button>
 
-        <button class="side-item">
+        <button class="side-item" :class="{ active: showFavoritesOnly }" @click="emit('filterChange', 'favorites')">
           <span class="side-icon">☆</span>
           <span>收藏</span>
         </button>
@@ -193,5 +192,4 @@ const emit = defineEmits<{
   color: #999;
   font-size: 11px;
 }
-
 </style>

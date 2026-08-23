@@ -19,6 +19,7 @@ export function useJournal() {
     })
 
     const searchText = ref('')
+    const showFavoritesOnly = ref(false)
 
     // 计算两个时间戳之间的天数差
     const getDayDifference = (timestamp: number) => {
@@ -41,10 +42,16 @@ export function useJournal() {
     const filteredEntries = computed(() => {
         const keyword = searchText.value.trim().toLowerCase()
 
-        const result = [...entries.value].sort(
+        let result = [...entries.value].sort(
             (a, b) => b.updatedAt - a.updatedAt,
         )
 
+        // 只显示收藏
+        if (showFavoritesOnly.value) {
+            result = result.filter((entry) => entry.favorite)
+        }
+
+        // 搜索
         if (!keyword) {
             return result
         }
@@ -277,6 +284,7 @@ export function useJournal() {
 
         searchText,
         filteredEntries,
+        showFavoritesOnly,
         todayEntries,
         yesterdayEntries,
         olderEntries,

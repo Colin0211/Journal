@@ -17,6 +17,7 @@ const {
   saveCurrentEntry,
   toggleFavorite,
   filteredEntries,
+  showFavoritesOnly,
   todayEntries,
   yesterdayEntries,
   olderEntries,
@@ -112,8 +113,9 @@ onMounted(async () => {
   <div class="journal-app">
 
     <!-- 侧边栏 -->
-    <Sidebar :entry-count="entries.length" @new-entry="newEntry" @test-s-q-lite="test"
-      @test-list-s-q-lite="testListSQLite" />
+    <Sidebar :entry-count="entries.length" :show-favorites-only="showFavoritesOnly" @new-entry="newEntry"
+      @test-s-q-lite="test" @test-list-s-q-lite="testListSQLite"
+      @filter-change="showFavoritesOnly = $event === 'favorites'" />
 
     <!-- 中间日记列表 -->
     <EntryList ref="entryListRef" :entries="entries" :selected-id="selectedId" :search-text="searchText"
