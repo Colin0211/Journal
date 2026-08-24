@@ -7,17 +7,26 @@ import EntryList from './components/EntryList.vue'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 
 const {
+
   entries,
+  deletedEntries,
   selectedId,
   selectedEntry,
+
   loadEntries,
+  loadDeletedEntries,
+
   createEntry,
   deleteEntry,
+  restoreEntry,
+  permanentlyDeleteEntry,
+
   handleContentChange,
   saveCurrentEntry,
   toggleFavorite,
   filteredEntries,
   showFavoritesOnly,
+  showDeletedOnly,
   todayEntries,
   yesterdayEntries,
   olderEntries,
@@ -48,6 +57,20 @@ const newEntry = async () => {
   await nextTick()
 
   editorRef.value?.focusTitle()
+}
+
+// 处理过滤器变化
+const handleFilterChange = async (
+  type: 'all' | 'favorites' | 'deleted',
+) => {
+  showFavoritesOnly.value = type === 'favorites'
+  showDeletedOnly.value = type === 'deleted'
+
+  if (type === 'deleted') {
+    await loadDeletedEntries()
+  }
+
+  selectedId.value = null
 }
 
 // 处理键盘快捷键
@@ -83,17 +106,19 @@ onMounted(async () => {
   <div class="journal-app">
 
     <!-- 侧边栏 -->
-    <Sidebar :entry-count="entries.length" :show-favorites-only="showFavoritesOnly" @new-entry="newEntry"
-      @filter-change="showFavoritesOnly = $event === 'favorites'" />
+    <Sidebar :entry-count="entries.length" :show-favorites-only="showFavoritesOnly" :show-deleted-only="showDeletedOnly"
+      @new-entry="newEntry" @filter-change="handleFilterChange" />
 
     <!-- 中间日记列表 -->
     <EntryList ref="entryListRef" :entries="entries" :selected-id="selectedId" :search-text="searchText"
       :today-entries="todayEntries" :yesterday-entries="yesterdayEntries" :older-entries="olderEntries"
-      :filtered-entries="filteredEntries" @update:search-text="searchText = $event" @select-entry="selectEntry"
-      @new-entry="newEntry" />
+      :filtered-entries="filteredEntries" :deleted-entries="deletedEntries" :show-deleted-only="showDeletedOnly"
+      :show-favorites-only="showFavoritesOnly" @update:search-text="searchText = $event" @select-entry="selectEntry"
+      @new-entry="newEntry" @restore-entry="restoreEntry" @permanently-delete-entry="permanentlyDeleteEntry" />
 
     <!-- 编辑器 -->
-    <Editor ref="editorRef" :entry="selectedEntry" @toggle-favorite="toggleFavorite" @delete="deleteEntry"
+    <Editor ref="editorRef" :entry="selectedEntry" :is-deleted="showDeletedOnly" @toggle-favorite="toggleFavorite"
+      @delete="deleteEntry" @restore="restoreEntry" @permanently-delete="permanentlyDeleteEntry"
       @content-change="handleContentChange" @new-entry="newEntry" />
   </div>
 </template>

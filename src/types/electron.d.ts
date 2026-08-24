@@ -38,6 +38,20 @@ declare global {
         success: boolean
       }>
 
+      listDeletedJournals(): Promise<Journal[]>
+
+      restoreJournal(
+        id: number,
+      ): Promise<{
+        success: boolean
+      }>
+
+      permanentlyDeleteJournal(
+        id: number,
+      ): Promise<{
+        success: boolean
+      }>
+
       toggleFavorite(
         id: number,
       ): Promise<{

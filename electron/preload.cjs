@@ -25,6 +25,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('journal:delete', id)
   },
 
+  // 获取回收站中的日记
+  listDeletedJournals: () => {
+    return ipcRenderer.invoke('journal:listDeleted')
+  },
+
+  // 恢复日记
+  restoreJournal: (id) => {
+    return ipcRenderer.invoke('journal:restore', id)
+  },
+
+  // 永久删除日记
+  permanentlyDeleteJournal: (id) => {
+    return ipcRenderer.invoke('journal:permanentlyDelete', id)
+  },
+
   // 切换收藏状态
   toggleFavorite: (id) => {
     return ipcRenderer.invoke('journal:toggleFavorite', id)

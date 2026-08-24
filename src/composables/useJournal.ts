@@ -11,15 +11,30 @@ export interface JournalEntry {
 
 export function useJournal() {
     const entries = ref<JournalEntry[]>([])
+    const deletedEntries = ref<JournalEntry[]>([])
     const selectedId = ref<number | null>(null)
-    const selectedEntry = computed(() => {
-        return (
-            entries.value.find((entry) => entry.id === selectedId.value) ?? null
-        )
-    })
+    
 
     const searchText = ref('')
     const showFavoritesOnly = ref(false)
+    const showDeletedOnly = ref(false)
+
+    // 计算当前选中的日记条目
+    const selectedEntry = computed(() => {
+    if (showDeletedOnly.value) {
+        return (
+            deletedEntries.value.find(
+                (entry) => entry.id === selectedId.value,
+            ) ?? null
+        )
+    }
+
+    return (
+        entries.value.find(
+            (entry) => entry.id === selectedId.value,
+        ) ?? null
+    )
+})
 
     // 计算两个时间戳之间的天数差
     const getDayDifference = (timestamp: number) => {
@@ -119,6 +134,18 @@ export function useJournal() {
         }
     }
 
+    // 从 SQLite 加载回收站日记
+    const loadDeletedEntries = async () => {
+        try {
+            const journals = await window.electronAPI.listDeletedJournals()
+
+            deletedEntries.value = journals.map(convertJournal)
+        } catch (error) {
+            console.error('加载回收站日记失败：', error)
+            return []
+        }
+    }
+
     // 创建新的日记条目
     const createEntry = async (): Promise<JournalEntry> => {
         const journal = await window.electronAPI.createJournal({
@@ -157,6 +184,9 @@ export function useJournal() {
             return
         }
 
+        // SQLite 删除成功后，加入回收站列表
+        deletedEntries.value.unshift(current)
+
         // SQLite 删除成功后，再更新 Vue 列表
         const index = entries.value.findIndex(
             (entry) => entry.id === current.id,
@@ -180,6 +210,70 @@ export function useJournal() {
             selectedId.value = nextEntry.id
         }
     }
+
+    // 恢复回收站中的日记条目
+    const restoreEntry = async (id: number) => {
+  try {
+    const result = await window.electronAPI.restoreJournal(id)
+
+    if (!result.success) {
+      console.error('恢复日记失败')
+      return false
+    }
+
+    const entry = deletedEntries.value.find(
+      (entry) => entry.id === id,
+    )
+
+    if (!entry) {
+      return false
+    }
+
+    // 从回收站移除
+    deletedEntries.value = deletedEntries.value.filter(
+      (entry) => entry.id !== id,
+    )
+
+    // 放回正常日记列表
+    entries.value.unshift(entry)
+
+    // 选中恢复后的日记
+    selectedId.value = entry.id
+
+    return true
+  } catch (error) {
+    console.error('恢复日记失败：', error)
+    return false
+  }
+}
+
+    // 永久删除回收站中的日记条目
+    const permanentlyDeleteEntry = async (id: number) => {
+  try {
+    const result =
+      await window.electronAPI.permanentlyDeleteJournal(id)
+
+    if (!result.success) {
+      console.error('永久删除日记失败')
+      return false
+    }
+
+    // 从回收站列表中移除
+    deletedEntries.value = deletedEntries.value.filter(
+      (entry) => entry.id !== id,
+    )
+
+    // 如果当前选中的正好是被永久删除的日记
+    if (selectedId.value === id) {
+      selectedId.value = null
+    }
+
+    return true
+  } catch (error) {
+    console.error('永久删除日记失败：', error)
+    return false
+  }
+}
 
     // 切换收藏状态
     const toggleFavorite = async () => {
@@ -235,6 +329,7 @@ export function useJournal() {
             return false
         }
     }
+
     let saveTimer: ReturnType<typeof setTimeout> | null = null
 
     // 保存当前选中的日记条目
@@ -279,12 +374,14 @@ export function useJournal() {
 
     return {
         entries,
+        deletedEntries,
         selectedId,
         selectedEntry,
 
         searchText,
         filteredEntries,
         showFavoritesOnly,
+        showDeletedOnly,
         todayEntries,
         yesterdayEntries,
         olderEntries,
@@ -293,6 +390,9 @@ export function useJournal() {
         createEntry,
         updateEntry,
         deleteEntry,
+        loadDeletedEntries,
+        restoreEntry,
+        permanentlyDeleteEntry,
         handleContentChange,
         saveCurrentEntry,
         toggleFavorite,

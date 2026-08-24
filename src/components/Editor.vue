@@ -4,11 +4,14 @@ import type { JournalEntry } from '../composables/useJournal'
 
 const props = defineProps<{
   entry: JournalEntry | null
+  isDeleted: boolean
 }>()
 
 const emit = defineEmits<{
   toggleFavorite: []
   delete: []
+  restore: [id: number]
+  permanentlyDelete: [id: number]
   contentChange: []
   newEntry: []
 }>()
@@ -54,14 +57,28 @@ const formatTime = (timestamp: number) => {
         </div>
 
         <div class="editor-toolbar-right">
-          <button class="toolbar-button" :class="{ favorite: props.entry.favorite }" title="收藏"
-            @click="emit('toggleFavorite')">
-            {{ props.entry.favorite ? '★' : '☆' }}
-          </button>
+          <!-- 正常日记 -->
+          <template v-if="!props.isDeleted">
+            <button class="toolbar-button" :class="{ favorite: props.entry.favorite }" title="收藏"
+              @click="emit('toggleFavorite')">
+              {{ props.entry.favorite ? '★' : '☆' }}
+            </button>
 
-          <button class="toolbar-button" title="删除" @click="emit('delete')">
-            ⌫
-          </button>
+            <button class="toolbar-button" title="删除" @click="emit('delete')">
+              ⌫
+            </button>
+          </template>
+
+          <!-- 回收站日记 -->
+          <template v-else>
+            <button class="toolbar-button" title="恢复日记" @click="emit('restore', props.entry.id)">
+              ↩
+            </button>
+
+            <button class="toolbar-button" title="永久删除" @click="emit('permanentlyDelete', props.entry.id)">
+              ⌫
+            </button>
+          </template>
 
           <button class="toolbar-button" title="更多">
             •••
@@ -74,15 +91,17 @@ const formatTime = (timestamp: number) => {
           {{ formatDateLabel(props.entry.updatedAt) }}
         </div>
 
-        <input ref="titleInput" :value="props.entry.title" class="document-title" type="text" placeholder="无标题" @input="
-          props.entry.title = ($event.target as HTMLInputElement).value,
-        emit('contentChange')
-          " />
+        <input :value="props.entry.title" class="document-title" type="text" placeholder="无标题"
+          :readonly="props.isDeleted" @input="
+            props.entry.title = ($event.target as HTMLInputElement).value,
+            emit('contentChange')
+            " />
 
-        <textarea :value="props.entry.content" class="document-body" placeholder="今天发生了什么？" @input="
-          props.entry.content = ($event.target as HTMLTextAreaElement).value,
-        emit('contentChange')
-          "></textarea>
+        <textarea :value="props.entry.content" class="document-body" placeholder="今天发生了什么？" :readonly="props.isDeleted"
+          @input="
+            props.entry.content = ($event.target as HTMLTextAreaElement).value,
+            emit('contentChange')
+            "></textarea>
 
         <div class="document-meta">
           最后编辑于 {{ formatTime(props.entry.updatedAt) }}

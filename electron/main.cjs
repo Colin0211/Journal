@@ -9,6 +9,9 @@ const {
   updateJournal,
   deleteJournal,
   toggleFavorite,
+  getDeletedJournals,
+  restoreJournal,
+  permanentlyDeleteJournal,
 } = require('./database.cjs')
 
 // Node.js 路径模块
@@ -45,13 +48,7 @@ function createWindow() {
   mainWindow.loadURL('http://localhost:5173')
 }
 
-// IPC：创建一篇日记
-// Vue 以后可以通过：
-// window.electronAPI.createJournal({
-//   title: '今天',
-//   content: '今天发生了很多事情'
-// })
-// 来调用这里。
+//新建日记
 ipcMain.handle('journal:create', (_event, data) => {
 
   // 获取已经初始化好的 SQLite 数据库
@@ -99,7 +96,7 @@ ipcMain.handle('journal:update', (_event, id, data) => {
   return updateJournal(id, data)
 })
 
-// 删除日记
+// 删除日记到回收站
 ipcMain.handle('journal:delete', (_event, id) => {
   return deleteJournal(id)
 })
@@ -107,6 +104,21 @@ ipcMain.handle('journal:delete', (_event, id) => {
 // 切换收藏状态
 ipcMain.handle('journal:toggleFavorite', (_event, id) => {
   return toggleFavorite(id)
+})
+
+//读取回收站
+ipcMain.handle('journal:listDeleted', () => {
+  return getDeletedJournals()
+})
+
+// 恢复日记
+ipcMain.handle('journal:restore', (_, id) => {
+  return restoreJournal(id)
+})
+
+// 永久删除日记
+ipcMain.handle('journal:permanentlyDelete', (_, id) => {
+  return permanentlyDeleteJournal(id)
 })
 
 // Electron 启动

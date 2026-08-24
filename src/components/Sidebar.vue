@@ -2,13 +2,14 @@
 defineProps<{
   entryCount: number
   showFavoritesOnly: boolean
+  showDeletedOnly: boolean
 }>()
 
 const emit = defineEmits<{
   newEntry: []
   testSQLite: []
   testListSQLite: []
-  filterChange: [filter: 'all' | 'favorites']
+  filterChange: [filter: 'all' | 'favorites' | 'deleted']
 }>()
 </script>
 
@@ -30,13 +31,15 @@ const emit = defineEmits<{
       </button>
 
       <nav class="side-navigation">
-        <button class="side-item" :class="{ active: !showFavoritesOnly }" @click="emit('filterChange', 'all')">
+        <button class="side-item" :class="{ active: !showFavoritesOnly && !showDeletedOnly }"
+          @click="emit('filterChange', 'all')">
           <span class="side-icon">▤</span>
           <span>所有日记</span>
           <span class="side-count">{{ entryCount }}</span>
         </button>
 
-        <button class="side-item" :class="{ active: showFavoritesOnly }" @click="emit('filterChange', 'favorites')">
+        <button class="side-item" :class="{ active: showFavoritesOnly && !showDeletedOnly }"
+          @click="emit('filterChange', 'favorites')">
           <span class="side-icon">☆</span>
           <span>收藏</span>
         </button>
@@ -46,7 +49,8 @@ const emit = defineEmits<{
           <span>标签</span>
         </button>
 
-        <button class="side-item">
+        <button class="side-item" :class="{ active: showDeletedOnly }"
+          @click="emit('filterChange', 'deleted')">
           <span class="side-icon">⌫</span>
           <span>最近删除</span>
         </button>

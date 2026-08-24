@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { JournalEntry } from '../composables/useJournal'
 
-defineProps<{
+const props = defineProps<{
   entries: JournalEntry[]
+  deletedEntries: JournalEntry[]
   selectedId: number | null
   searchText: string
   todayEntries: JournalEntry[]
   yesterdayEntries: JournalEntry[]
   olderEntries: JournalEntry[]
   filteredEntries: JournalEntry[]
+  showFavoritesOnly: boolean
+  showDeletedOnly: boolean
 }>()
 
 const emit = defineEmits<{
   'update:searchText': [value: string]
   selectEntry: [id: number]
   newEntry: []
+  restoreEntry: [id: number]
+  permanentlyDeleteEntry: [id: number]
 }>()
 
 const formatListDate = (timestamp: number) => {
@@ -26,6 +31,14 @@ const formatListDate = (timestamp: number) => {
 }
 
 const searchInput = ref<HTMLInputElement | null>(null)
+
+const displayEntries = computed(() => {
+  if (props.showDeletedOnly) {
+    return props.deletedEntries
+  }
+
+  return props.filteredEntries
+})
 
 defineExpose({
   searchInput,
@@ -40,11 +53,7 @@ defineExpose({
         <div class="entry-total">{{ entries.length }} 篇日记</div>
       </div>
 
-      <button
-        class="icon-button"
-        title="新建日记"
-        @click="emit('newEntry')"
-      >
+      <button class="icon-button" title="新建日记" @click="emit('newEntry')">
         ＋
       </button>
     </header>
@@ -53,56 +62,71 @@ defineExpose({
       <div class="search-field">
         <span class="search-icon">⌕</span>
 
-        <input
-          ref="searchInput"
-          :value="searchText"
-          type="text"
-          placeholder="搜索"
-          @input="
-            emit(
-              'update:searchText',
-              ($event.target as HTMLInputElement).value,
-            )
-          "
-        />
+        <input ref="searchInput" :value="searchText" type="text" placeholder="搜索" @input="
+          emit(
+            'update:searchText',
+            ($event.target as HTMLInputElement).value,
+          )
+          " />
 
         <kbd v-if="!searchText">Ctrl K</kbd>
 
-        <button
-          v-else
-          class="clear-search"
-          title="清除搜索"
-          @click="emit('update:searchText', '')"
-        >
+        <button v-else class="clear-search" title="清除搜索" @click="emit('update:searchText', '')">
           ×
         </button>
       </div>
     </div>
 
     <div class="entry-scroll">
+
+      <!-- 最近删除 -->
+      <section v-if="props.showDeletedOnly" class="deleted-entry-list">
+        <div v-for="entry in props.deletedEntries" :key="entry.id" class="entry-card"
+          :class="{ selected: props.selectedId === entry.id }" @click="emit('selectEntry', entry.id)">
+          <div class="entry-card-top">
+            <span class="entry-date">
+              {{ formatListDate(entry.updatedAt) }}
+            </span>
+          </div>
+
+          <div class="entry-card-title">
+            {{ entry.title || '无标题' }}
+          </div>
+
+          <div class="entry-card-preview">
+            {{ entry.content.replace(/\n/g, ' ').slice(0, 82) || '暂无内容' }}
+          </div>
+
+          <div class="deleted-entry-actions">
+            <button type="button" @click.stop="emit('restoreEntry', entry.id)">
+              恢复
+            </button>
+
+            <button type="button" @click.stop="emit('permanentlyDeleteEntry', entry.id)">
+              永久删除
+            </button>
+          </div>
+        </div>
+
+        <div v-if="props.deletedEntries.length === 0" class="no-results">
+          <div class="no-results-icon">⌫</div>
+          <div>回收站为空</div>
+          <small>删除的日记会在这里保留 30 天</small>
+        </div>
+      </section>
+
       <!-- 今天 -->
-      <section
-        v-if="todayEntries.length"
-        class="entry-group"
-      >
+      <section v-if="!props.showDeletedOnly && todayEntries.length" class="entry-group">
         <div class="group-title">今天</div>
 
-        <button
-          v-for="entry in todayEntries"
-          :key="entry.id"
-          class="entry-card"
-          :class="{ selected: selectedId === entry.id }"
-          @click="emit('selectEntry', entry.id)"
-        >
+        <button v-for="entry in todayEntries" :key="entry.id" class="entry-card"
+          :class="{ selected: selectedId === entry.id }" @click="emit('selectEntry', entry.id)">
           <div class="entry-card-top">
             <span class="entry-date">
               {{ formatListDate(entry.updatedAt) }}
             </span>
 
-            <span
-              v-if="entry.favorite"
-              class="favorite-mark"
-            >
+            <span v-if="entry.favorite" class="favorite-mark">
               ★
             </span>
           </div>
@@ -121,28 +145,17 @@ defineExpose({
       </section>
 
       <!-- 昨天 -->
-      <section
-        v-if="yesterdayEntries.length"
-        class="entry-group"
-      >
+      <section v-if="!props.showDeletedOnly && yesterdayEntries.length" class="entry-group">
         <div class="group-title">昨天</div>
 
-        <button
-          v-for="entry in yesterdayEntries"
-          :key="entry.id"
-          class="entry-card"
-          :class="{ selected: selectedId === entry.id }"
-          @click="emit('selectEntry', entry.id)"
-        >
+        <button v-for="entry in yesterdayEntries" :key="entry.id" class="entry-card"
+          :class="{ selected: selectedId === entry.id }" @click="emit('selectEntry', entry.id)">
           <div class="entry-card-top">
             <span class="entry-date">
               {{ formatListDate(entry.updatedAt) }}
             </span>
 
-            <span
-              v-if="entry.favorite"
-              class="favorite-mark"
-            >
+            <span v-if="entry.favorite" class="favorite-mark">
               ★
             </span>
           </div>
@@ -161,28 +174,17 @@ defineExpose({
       </section>
 
       <!-- 更早 -->
-      <section
-        v-if="olderEntries.length"
-        class="entry-group"
-      >
+      <section v-if="!props.showDeletedOnly && olderEntries.length" class="entry-group">
         <div class="group-title">更早</div>
 
-        <button
-          v-for="entry in olderEntries"
-          :key="entry.id"
-          class="entry-card"
-          :class="{ selected: selectedId === entry.id }"
-          @click="emit('selectEntry', entry.id)"
-        >
+        <button v-for="entry in olderEntries" :key="entry.id" class="entry-card"
+          :class="{ selected: selectedId === entry.id }" @click="emit('selectEntry', entry.id)">
           <div class="entry-card-top">
             <span class="entry-date">
               {{ formatListDate(entry.updatedAt) }}
             </span>
 
-            <span
-              v-if="entry.favorite"
-              class="favorite-mark"
-            >
+            <span v-if="entry.favorite" class="favorite-mark">
               ★
             </span>
           </div>
@@ -201,10 +203,10 @@ defineExpose({
       </section>
 
       <!-- 没有搜索结果 -->
-      <div
-        v-if="filteredEntries.length === 0"
-        class="no-results"
-      >
+      <div v-if="
+        !props.showDeletedOnly &&
+        filteredEntries.length === 0
+      " class="no-results">
         <div class="no-results-icon">⌕</div>
         <div>没有找到日记</div>
         <small>试试其他搜索关键词</small>
@@ -214,7 +216,6 @@ defineExpose({
 </template>
 
 <style scoped>
-
 .entry-panel {
   width: 310px;
   flex-shrink: 0;

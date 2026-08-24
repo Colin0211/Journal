@@ -24,22 +24,53 @@ function initDatabase() {
       updated_at TEXT NOT NULL
     )
   `)
-  // 给已有数据库添加 favorite 字段
-  const columns = db
-    .prepare(`PRAGMA table_info(journals)`)
-    .all()
-  const hasFavorite = columns.some(
-    (column) => column.name === 'favorite',
-  )
-  if (!hasFavorite) {
-    db.exec(`
+
+// 检查数据库字段
+const columns = db
+  .prepare(`PRAGMA table_info(journals)`)
+  .all()
+
+// favorite 字段
+const hasFavorite = columns.some(
+  (column) => column.name === 'favorite',
+)
+
+if (!hasFavorite) {
+  db.exec(`
     ALTER TABLE journals
     ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0
   `)
 
-    console.log('SQLite: added favorite column')
-  }
-  console.log('SQLite database:', dbPath)
+  console.log('SQLite: added favorite column')
+}
+
+// deleted 字段
+const hasDeleted = columns.some(
+  (column) => column.name === 'deleted',
+)
+
+if (!hasDeleted) {
+  db.exec(`
+    ALTER TABLE journals
+    ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0
+  `)
+
+  console.log('SQLite: added deleted column')
+}
+
+// deleted_at 字段
+const hasDeletedAt = columns.some(
+  (column) => column.name === 'deleted_at',
+)
+
+if (!hasDeletedAt) {
+  db.exec(`
+    ALTER TABLE journals
+    ADD COLUMN deleted_at TEXT
+  `)
+
+  console.log('SQLite: added deleted_at column')
+}
 }
 
 // 获取数据库实例
@@ -62,8 +93,10 @@ function getAllJournals() {
       content,
       created_at,
       updated_at,
-      favorite
+      favorite,
+      deleted
     FROM journals
+    WHERE deleted = 0
     ORDER BY updated_at DESC
   `)
 
@@ -98,13 +131,64 @@ function updateJournal(id, data) {
   }
 }
 
-// 删除日记
+// 将日记移动到回收站
 function deleteJournal(id) {
   const db = getDatabase()
 
+  const deletedAt = new Date().toISOString()
+
   const stmt = db.prepare(`
-    DELETE FROM journals
+    UPDATE journals
+    SET
+      deleted = 1,
+      deleted_at = ?
     WHERE id = ?
+      AND deleted = 0
+  `)
+
+  const result = stmt.run(
+    deletedAt,
+    id,
+  )
+
+  return {
+    success: result.changes > 0,
+  }
+}
+
+// 获取回收站中的日记
+function getDeletedJournals() {
+  const db = getDatabase()
+
+  const stmt = db.prepare(`
+    SELECT
+      id,
+      title,
+      content,
+      created_at,
+      updated_at,
+      favorite,
+      deleted,
+      deleted_at
+    FROM journals
+    WHERE deleted = 1
+    ORDER BY deleted_at DESC
+  `)
+
+  return stmt.all()
+}
+
+// 从回收站恢复日记
+function restoreJournal(id) {
+  const db = getDatabase()
+
+  const stmt = db.prepare(`
+    UPDATE journals
+    SET
+      deleted = 0,
+      deleted_at = NULL
+    WHERE id = ?
+      AND deleted = 1
   `)
 
   const result = stmt.run(id)
@@ -112,6 +196,43 @@ function deleteJournal(id) {
   return {
     success: result.changes > 0,
   }
+}
+
+// 永久删除回收站中的日记
+function permanentlyDeleteJournal(id) {
+  const db = getDatabase()
+
+  const stmt = db.prepare(`
+    DELETE FROM journals
+    WHERE id = ?
+      AND deleted = 1
+  `)
+
+  const result = stmt.run(id)
+
+  return {
+    success: result.changes > 0,
+  }
+}
+
+// 自动清理超过 30 天的回收站日记
+function cleanupExpiredJournals() {
+  const db = getDatabase()
+
+  const stmt = db.prepare(`
+    DELETE FROM journals
+    WHERE deleted = 1
+      AND deleted_at IS NOT NULL
+      AND deleted_at <= datetime('now', '-30 days')
+  `)
+
+  const result = stmt.run()
+
+  console.log(
+    `SQLite: 自动清理了 ${result.changes} 条超过 30 天的日记`,
+  )
+
+  return result.changes
 }
 
 //收藏日记
@@ -153,7 +274,11 @@ module.exports = {
   initDatabase,
   getDatabase,
   getAllJournals,
+  getDeletedJournals,
   updateJournal,
   deleteJournal,
+  restoreJournal,
+  permanentlyDeleteJournal,
   toggleFavorite,
+  cleanupExpiredJournals,
 }
