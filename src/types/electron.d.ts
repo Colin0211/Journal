@@ -12,6 +12,7 @@ interface Journal {
   created_at: string
   updated_at: string
   favorite: number
+  deleted_at: string | null
 }
 
 declare global {

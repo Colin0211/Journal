@@ -43,6 +43,24 @@ const formatTime = (timestamp: number) => {
     minute: '2-digit',
   })
 }
+
+// 计算删除日期
+const formatDeleteDate = (timestamp: number | null) => {
+  if (!timestamp) {
+    return ''
+  }
+
+  const deleteDate = new Date(timestamp)
+
+  deleteDate.setDate(deleteDate.getDate() + 30)
+
+  return deleteDate.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
 </script>
 
 <template>
@@ -50,9 +68,14 @@ const formatTime = (timestamp: number) => {
     <template v-if="props.entry">
       <header class="editor-toolbar">
         <div class="editor-toolbar-left">
-          <span class="saved-indicator">
+          <span v-if="!props.isDeleted" class="saved-indicator">
             <span class="saved-dot"></span>
             已保存
+          </span>
+
+          <span v-else class="deleted-indicator">
+            <span class="deleted-dot"></span>
+            已移至最近删除
           </span>
         </div>
 
@@ -91,6 +114,12 @@ const formatTime = (timestamp: number) => {
           {{ formatDateLabel(props.entry.updatedAt) }}
         </div>
 
+        <div v-if="props.isDeleted" class="deleted-notice">
+          此日记已移至最近删除，将于
+          {{ formatDeleteDate(props.entry.deletedAt) }}
+          自动永久删除
+        </div>
+
         <input :value="props.entry.title" class="document-title" type="text" placeholder="无标题"
           :readonly="props.isDeleted" @input="
             props.entry.title = ($event.target as HTMLInputElement).value,
@@ -110,19 +139,35 @@ const formatTime = (timestamp: number) => {
     </template>
 
     <div v-else class="empty-editor">
-      <div class="empty-editor-icon">✎</div>
+      <!-- 最近删除为空 -->
+      <template v-if="props.isDeleted">
+        <div class="empty-editor-icon">⌫</div>
 
-      <h2>开始记录</h2>
+        <h2>最近删除为空</h2>
 
-      <p>
-        写下今天的故事，
-        <br />
-        留住那些值得记住的瞬间。
-      </p>
+        <p>
+          被删除的日记会显示在这里，
+          <br />
+          并在 30 天后自动永久删除。
+        </p>
+      </template>
 
-      <button class="empty-editor-button" @click="emit('newEntry')">
-        新建日记
-      </button>
+      <!-- 正常状态没有选中日记 -->
+      <template v-else>
+        <div class="empty-editor-icon">✎</div>
+
+        <h2>开始记录</h2>
+
+        <p>
+          写下今天的故事，
+          <br />
+          留住那些值得记住的瞬间。
+        </p>
+
+        <button class="empty-editor-button" @click="emit('newEntry')">
+          新建日记
+        </button>
+      </template>
     </div>
   </main>
 </template>
@@ -165,6 +210,21 @@ const formatTime = (timestamp: number) => {
   background: #b7b7bd;
 }
 
+.deleted-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #999;
+  font-size: 10px;
+}
+
+.deleted-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c7c7cc;
+}
+
 .editor-toolbar-right {
   display: flex;
   gap: 3px;
@@ -202,6 +262,15 @@ const formatTime = (timestamp: number) => {
   margin-bottom: 17px;
   color: #8e8e93;
   font-size: 12px;
+}
+
+.deleted-notice {
+  margin-bottom: 20px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f5f5f7;
+  color: #8e8e93;
+  font-size: 11px;
 }
 
 .document-title {

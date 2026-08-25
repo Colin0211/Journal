@@ -94,7 +94,8 @@ function getAllJournals() {
       created_at,
       updated_at,
       favorite,
-      deleted
+      deleted,
+      deleted_at
     FROM journals
     WHERE deleted = 0
     ORDER BY updated_at DESC

@@ -12,6 +12,7 @@ const {
   getDeletedJournals,
   restoreJournal,
   permanentlyDeleteJournal,
+  cleanupExpiredJournals
 } = require('./database.cjs')
 
 // Node.js 路径模块
@@ -127,6 +128,9 @@ app.whenReady().then(() => {
   // 初始化 SQLite
   // 必须在 IPC 真正使用数据库之前完成
   initDatabase()
+
+  // 自动清理超过 30 天的回收站日记
+  cleanupExpiredJournals()
 
   // 创建窗口
   createWindow()

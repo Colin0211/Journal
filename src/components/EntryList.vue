@@ -19,8 +19,6 @@ const emit = defineEmits<{
   'update:searchText': [value: string]
   selectEntry: [id: number]
   newEntry: []
-  restoreEntry: [id: number]
-  permanentlyDeleteEntry: [id: number]
 }>()
 
 const formatListDate = (timestamp: number) => {
@@ -95,16 +93,6 @@ defineExpose({
 
           <div class="entry-card-preview">
             {{ entry.content.replace(/\n/g, ' ').slice(0, 82) || '暂无内容' }}
-          </div>
-
-          <div class="deleted-entry-actions">
-            <button type="button" @click.stop="emit('restoreEntry', entry.id)">
-              恢复
-            </button>
-
-            <button type="button" @click.stop="emit('permanentlyDeleteEntry', entry.id)">
-              永久删除
-            </button>
           </div>
         </div>
 

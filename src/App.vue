@@ -68,6 +68,9 @@ const handleFilterChange = async (
 
   if (type === 'deleted') {
     await loadDeletedEntries()
+
+    selectedId.value = deletedEntries.value[0]?.id ?? null
+    return
   }
 
   selectedId.value = null
@@ -114,7 +117,7 @@ onMounted(async () => {
       :today-entries="todayEntries" :yesterday-entries="yesterdayEntries" :older-entries="olderEntries"
       :filtered-entries="filteredEntries" :deleted-entries="deletedEntries" :show-deleted-only="showDeletedOnly"
       :show-favorites-only="showFavoritesOnly" @update:search-text="searchText = $event" @select-entry="selectEntry"
-      @new-entry="newEntry" @restore-entry="restoreEntry" @permanently-delete-entry="permanentlyDeleteEntry" />
+      @new-entry="newEntry" />
 
     <!-- 编辑器 -->
     <Editor ref="editorRef" :entry="selectedEntry" :is-deleted="showDeletedOnly" @toggle-favorite="toggleFavorite"
