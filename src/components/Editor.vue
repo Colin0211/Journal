@@ -4,6 +4,7 @@ import type { JournalEntry } from '../composables/useJournal'
 
 const props = defineProps<{
   entry: JournalEntry | null
+  isFavorites: boolean
   isDeleted: boolean
 }>()
 
@@ -149,6 +150,19 @@ const formatDeleteDate = (timestamp: number | null) => {
           被删除的日记会显示在这里，
           <br />
           并在 30 天后自动永久删除。
+        </p>
+      </template>
+
+      <!-- 收藏夹为空 -->
+      <template v-else-if="props.isFavorites">
+        <div class="empty-editor-icon">☆</div>
+
+        <h2>暂无收藏</h2>
+
+        <p>
+          收藏你喜欢的日记，
+          <br />
+          它们会显示在这里。
         </p>
       </template>
 

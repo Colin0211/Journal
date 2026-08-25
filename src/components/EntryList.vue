@@ -28,6 +28,24 @@ const formatListDate = (timestamp: number) => {
   })
 }
 
+// 处理删除时间
+const formatDeletedDate = (timestamp: number | null) => {
+  if (!timestamp) {
+    return '未知'
+  }
+
+  return formatListDate(timestamp)
+}
+
+const getRemainingDays = (deletedAt: number) => {
+  const expireTime = deletedAt + 30 * 24 * 60 * 60 * 1000
+  const remaining = Math.ceil(
+    (expireTime - Date.now()) / (24 * 60 * 60 * 1000),
+  )
+
+  return Math.max(remaining, 0)
+}
+
 const searchInput = ref<HTMLInputElement | null>(null)
 
 const displayEntries = computed(() => {
@@ -47,16 +65,33 @@ defineExpose({
   <section class="entry-panel">
     <header class="entry-header">
       <div>
-        <h1>日记</h1>
-        <div class="entry-total">{{ entries.length }} 篇日记</div>
+        <h1>
+          {{
+            props.showDeletedOnly
+              ? '最近删除'
+              : props.showFavoritesOnly
+                ? '收藏'
+                : '日记'
+          }}
+        </h1>
+
+        <div class="entry-total">
+          {{
+            props.showDeletedOnly
+              ? `${props.deletedEntries.length} 篇日记`
+              : props.showFavoritesOnly
+                ? `${props.filteredEntries.length} 篇收藏`
+                : `${entries.length} 篇日记`
+          }}
+        </div>
       </div>
 
-      <button class="icon-button" title="新建日记" @click="emit('newEntry')">
+      <button v-if="!props.showDeletedOnly && !props.showFavoritesOnly" class="icon-button" title="新建日记" @click="emit('newEntry')">
         ＋
       </button>
     </header>
 
-    <div class="search-container">
+    <div v-if="!props.showDeletedOnly" class="search-container">
       <div class="search-field">
         <span class="search-icon">⌕</span>
 
@@ -83,8 +118,22 @@ defineExpose({
           :class="{ selected: props.selectedId === entry.id }" @click="emit('selectEntry', entry.id)">
           <div class="entry-card-top">
             <span class="entry-date">
-              {{ formatListDate(entry.updatedAt) }}
+              最后编辑于 {{ formatListDate(entry.updatedAt) }}
             </span>
+
+            <div class="deleted-info">
+              <span class="deleted-date">
+                移除于 {{ formatDeletedDate(entry.deletedAt) }}
+              </span>
+
+              <span v-if="entry.deletedAt" class="remaining-days">
+                · 还剩{{ getRemainingDays(entry.deletedAt) }}天
+              </span>
+
+              <span v-if="entry.favorite" class="favorite-mark">
+                ★
+              </span>
+            </div>
           </div>
 
           <div class="entry-card-title">
@@ -99,7 +148,7 @@ defineExpose({
         <div v-if="props.deletedEntries.length === 0" class="no-results">
           <div class="no-results-icon">⌫</div>
           <div>回收站为空</div>
-          <small>删除的日记会在这里保留 30 天</small>
+          <small>删除的日记会在 30 天后自动永久删除</small>
         </div>
       </section>
 
@@ -382,6 +431,80 @@ defineExpose({
   line-height: 1.45;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ================================
+   最近删除
+================================ */
+
+.deleted-entry-list .entry-card {
+  padding: 13px 12px 12px;
+  margin-bottom: 5px;
+  border: 1px solid transparent;
+}
+
+/* 第一行：最后编辑 + 删除信息 */
+.deleted-entry-list .entry-card-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 17px;
+  margin-bottom: 5px;
+}
+
+.deleted-entry-list .entry-date {
+  color: #8e8e93;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.deleted-info {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+  color: #a1a1a6;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.deleted-date {
+  color: #8e8e93;
+}
+
+.remaining-days {
+  color: #a1a1a6;
+}
+
+.deleted-entry-list .favorite-mark {
+  margin-left: 5px;
+  color: #777;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* 标题 */
+.deleted-entry-list .entry-card-title {
+  margin-top: 0;
+  margin-bottom: 3px;
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 内容预览 */
+.deleted-entry-list .entry-card-preview {
+  margin-top: 0;
+  color: #8e8e93;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* 回收站为空 */
+.deleted-entry-list .no-results {
+  padding-top: 75px;
 }
 
 .no-results {

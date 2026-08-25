@@ -66,14 +66,21 @@ const handleFilterChange = async (
   showFavoritesOnly.value = type === 'favorites'
   showDeletedOnly.value = type === 'deleted'
 
+  if (type === 'favorites') {
+    selectedId.value = filteredEntries.value[0]?.id ?? null
+
+    return
+  }
+
   if (type === 'deleted') {
     await loadDeletedEntries()
 
     selectedId.value = deletedEntries.value[0]?.id ?? null
+
     return
   }
 
-  selectedId.value = null
+  selectedId.value = entries.value[0]?.id ?? null
 }
 
 // 处理键盘快捷键
@@ -120,9 +127,9 @@ onMounted(async () => {
       @new-entry="newEntry" />
 
     <!-- 编辑器 -->
-    <Editor ref="editorRef" :entry="selectedEntry" :is-deleted="showDeletedOnly" @toggle-favorite="toggleFavorite"
-      @delete="deleteEntry" @restore="restoreEntry" @permanently-delete="permanentlyDeleteEntry"
-      @content-change="handleContentChange" @new-entry="newEntry" />
+    <Editor ref="editorRef" :entry="selectedEntry" :is-deleted="showDeletedOnly" :is-favorites="showFavoritesOnly"
+      @toggle-favorite="toggleFavorite" @delete="deleteEntry" @restore="restoreEntry"
+      @permanently-delete="permanentlyDeleteEntry" @content-change="handleContentChange" @new-entry="newEntry" />
   </div>
 </template>
 

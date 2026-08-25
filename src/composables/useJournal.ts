@@ -177,6 +177,16 @@ export function useJournal() {
             return
         }
 
+        // 如果当前在收藏夹，记录当前日记在收藏列表中的位置
+        const currentId = current.id
+
+        const favoriteIndex = showFavoritesOnly.value
+            ? filteredEntries.value.findIndex(
+                (entry) => entry.id === currentId,
+            )
+            : -1
+
+
         // 先从 SQLite 删除
         try {
             const result = await window.electronAPI.deleteJournal(current.id)
@@ -202,18 +212,34 @@ export function useJournal() {
             (entry) => entry.id !== current.id,
         )
 
-        // 删除后已经没有日记
-        if (entries.value.length === 0) {
-            selectedId.value = null
+        // 当前在收藏夹
+        if (showFavoritesOnly.value) {
+            const remainingEntries = filteredEntries.value
+
+            if (remainingEntries.length === 0) {
+                selectedId.value = null
+            } else if (remainingEntries[favoriteIndex]) {
+                // 优先选择当前日记后面的下一篇收藏
+                selectedId.value = remainingEntries[favoriteIndex].id
+            } else {
+                // 当前已经是最后一篇，选择上一篇
+                selectedId.value =
+                    remainingEntries[remainingEntries.length - 1]?.id ?? null
+            }
+
             return
         }
 
-        // 删除后选择相邻的日记
-        const nextIndex = Math.min(index, entries.value.length - 1)
-        const nextEntry = entries.value[nextIndex]
-
-        if (nextEntry) {
-            selectedId.value = nextEntry.id
+        // 当前在所有日记
+        if (entries.value.length === 0) {
+            selectedId.value = null
+        } else if (entries.value[index]) {
+            // 优先选择当前日记后面的下一篇
+            selectedId.value = entries.value[index].id
+        } else {
+            // 当前已经是最后一篇，选择上一篇
+            selectedId.value =
+                entries.value[entries.value.length - 1]?.id ?? null
         }
     }
 
@@ -235,6 +261,11 @@ export function useJournal() {
                 return false
             }
 
+            // 记录当前日记在回收站中的位置
+            const currentIndex = deletedEntries.value.findIndex(
+                (entry) => entry.id === id,
+            )
+
             // 从回收站移除
             deletedEntries.value = deletedEntries.value.filter(
                 (entry) => entry.id !== id,
@@ -243,8 +274,19 @@ export function useJournal() {
             // 放回正常日记列表
             entries.value.unshift(entry)
 
-            // 选中恢复后的日记
-            selectedId.value = entry.id
+            // 恢复后自动选择回收站中的相邻日记
+            const remainingEntries = deletedEntries.value
+
+            if (remainingEntries.length === 0) {
+                selectedId.value = null
+            } else if (remainingEntries[currentIndex]) {
+                // 优先选择原来位置后面的下一篇
+                selectedId.value = remainingEntries[currentIndex].id
+            } else {
+                // 如果当前已经是最后一篇，就选择上一篇
+                selectedId.value =
+                    remainingEntries[remainingEntries.length - 1]?.id ?? null
+            }
 
             return true
         } catch (error) {
@@ -264,6 +306,11 @@ export function useJournal() {
                 return false
             }
 
+            // 记录当前日记在回收站中的位置
+            const currentIndex = deletedEntries.value.findIndex(
+                (entry) => entry.id === id,
+            )
+
             // 从回收站列表中移除
             deletedEntries.value = deletedEntries.value.filter(
                 (entry) => entry.id !== id,
@@ -273,10 +320,15 @@ export function useJournal() {
 
             // 如果当前选中的正好是被永久删除的日记
             if (selectedId.value === id) {
-                if (remainingEntries.length > 0) {
-                    selectedId.value = remainingEntries[0]?.id ?? null
-                } else {
+                if (remainingEntries.length === 0) {
                     selectedId.value = null
+                } else if (remainingEntries[currentIndex]) {
+                    // 优先选择原来位置后面的下一篇
+                    selectedId.value = remainingEntries[currentIndex].id
+                } else {
+                    // 如果当前已经是最后一篇，就选择上一篇
+                    selectedId.value =
+                        remainingEntries[remainingEntries.length - 1]?.id ?? null
                 }
             }
 
@@ -303,8 +355,27 @@ export function useJournal() {
                 return
             }
 
+            const currentIndex = filteredEntries.value.findIndex(
+                (entry) => entry.id === current.id,
+            )
+
             // SQLite 更新成功后，再更新 Vue
             current.favorite = result.favorite
+
+            // 如果当前处于收藏夹，并且刚刚取消了收藏
+            if (showFavoritesOnly.value && !current.favorite) {
+                const remainingEntries = filteredEntries.value
+
+                // 优先选择当前日记后面的下一篇
+                if (remainingEntries[currentIndex]) {
+                    selectedId.value = remainingEntries[currentIndex].id
+                } else {
+                    // 如果当前已经是最后一篇，就选择上一页最后一篇
+                    selectedId.value =
+                        remainingEntries[remainingEntries.length - 1]?.id ?? null
+                }
+            }
+
         } catch (error) {
             console.error('更新收藏状态失败：', error)
         }
