@@ -12,7 +12,11 @@ const {
   getDeletedJournals,
   restoreJournal,
   permanentlyDeleteJournal,
-  cleanupExpiredJournals
+  cleanupExpiredJournals,
+  getAllTags,
+  getJournalTags,
+  addTagToJournal,
+  removeTagFromJournal
 } = require('./database.cjs')
 
 // Node.js 路径模块
@@ -120,6 +124,26 @@ ipcMain.handle('journal:restore', (_, id) => {
 // 永久删除日记
 ipcMain.handle('journal:permanentlyDelete', (_, id) => {
   return permanentlyDeleteJournal(id)
+})
+
+// 获取所有标签
+ipcMain.handle('tag:list', () => {
+  return getAllTags()
+})
+
+// 获取某篇日记的标签
+ipcMain.handle('journal:getTags', (_, journalId) => {
+  return getJournalTags(journalId)
+})
+
+// 给日记添加标签
+ipcMain.handle('journal:addTag', (_, journalId, tagName) => {
+  return addTagToJournal(journalId, tagName)
+})
+
+// 从日记中移除标签
+ipcMain.handle('journal:removeTag', (_, journalId, tagId) => {
+  return removeTagFromJournal(journalId, tagId)
 })
 
 // Electron 启动

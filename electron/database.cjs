@@ -14,6 +14,9 @@ function initDatabase() {
   // 开启 WAL 模式，提高数据库读写性能
   db.pragma('journal_mode = WAL')
 
+  // 开启 SQLite 外键约束
+  db.pragma('foreign_keys = ON')
+
   // 创建日记表（如果还不存在）
   db.exec(`
     CREATE TABLE IF NOT EXISTS journals (
@@ -25,52 +28,71 @@ function initDatabase() {
     )
   `)
 
-// 检查数据库字段
-const columns = db
-  .prepare(`PRAGMA table_info(journals)`)
-  .all()
+  // 检查数据库字段
+  const columns = db
+    .prepare(`PRAGMA table_info(journals)`)
+    .all()
 
-// favorite 字段
-const hasFavorite = columns.some(
-  (column) => column.name === 'favorite',
-)
+  // favorite 字段
+  const hasFavorite = columns.some(
+    (column) => column.name === 'favorite',
+  )
 
-if (!hasFavorite) {
-  db.exec(`
+  if (!hasFavorite) {
+    db.exec(`
     ALTER TABLE journals
     ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0
   `)
 
-  console.log('SQLite: added favorite column')
-}
+    console.log('SQLite: added favorite column')
+  }
 
-// deleted 字段
-const hasDeleted = columns.some(
-  (column) => column.name === 'deleted',
-)
+  // deleted 字段
+  const hasDeleted = columns.some(
+    (column) => column.name === 'deleted',
+  )
 
-if (!hasDeleted) {
-  db.exec(`
+  if (!hasDeleted) {
+    db.exec(`
     ALTER TABLE journals
     ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0
   `)
 
-  console.log('SQLite: added deleted column')
-}
+    console.log('SQLite: added deleted column')
+  }
 
-// deleted_at 字段
-const hasDeletedAt = columns.some(
-  (column) => column.name === 'deleted_at',
-)
+  // deleted_at 字段
+  const hasDeletedAt = columns.some(
+    (column) => column.name === 'deleted_at',
+  )
 
-if (!hasDeletedAt) {
-  db.exec(`
+  if (!hasDeletedAt) {
+    db.exec(`
     ALTER TABLE journals
     ADD COLUMN deleted_at TEXT
   `)
 
-  console.log('SQLite: added deleted_at column')
-}
+    console.log('SQLite: added deleted_at column')
+  }
+
+  // 创建标签表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE
+    )
+  `)
+
+  // 创建日记-标签关联表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS journal_tags (
+      journal_id INTEGER NOT NULL,
+      tag_id INTEGER NOT NULL,
+      PRIMARY KEY (journal_id, tag_id),
+      FOREIGN KEY (journal_id) REFERENCES journals(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    )
+  `)
 }
 
 // 获取数据库实例
@@ -271,6 +293,103 @@ function toggleFavorite(id) {
   }
 }
 
+// ================================
+// 标签相关操作
+// ================================
+
+// 获取所有标签
+function getAllTags() {
+  const db = getDatabase()
+
+  return db.prepare(`
+    SELECT id, name
+    FROM tags
+    ORDER BY name ASC
+  `).all()
+}
+
+
+// 获取某篇日记的所有标签
+function getJournalTags(journalId) {
+  const db = getDatabase()
+
+  return db.prepare(`
+    SELECT tags.id, tags.name
+    FROM tags
+    INNER JOIN journal_tags
+      ON tags.id = journal_tags.tag_id
+    WHERE journal_tags.journal_id = ?
+    ORDER BY tags.name ASC
+  `).all(journalId)
+}
+
+
+// 给日记添加标签
+function addTagToJournal(journalId, tagName) {
+  const db = getDatabase()
+
+  const name = tagName.trim()
+
+  if (!name) {
+    return false
+  }
+
+  // 如果标签不存在，就创建
+  const insertTag = db.prepare(`
+    INSERT OR IGNORE INTO tags (name)
+    VALUES (?)
+  `)
+
+  insertTag.run(name)
+
+  // 获取标签 ID
+  const tag = db.prepare(`
+    SELECT id
+    FROM tags
+    WHERE name = ?
+  `).get(name)
+
+  if (!tag) {
+    return false
+  }
+
+  // 建立日记和标签之间的关系
+  db.prepare(`
+    INSERT OR IGNORE INTO journal_tags (
+      journal_id,
+      tag_id
+    )
+    VALUES (?, ?)
+  `).run(journalId, tag.id)
+
+  return true
+}
+
+
+// 从日记中移除标签
+function removeTagFromJournal(journalId, tagId) {
+  const db = getDatabase()
+
+  const result = db.prepare(`
+    DELETE FROM journal_tags
+    WHERE journal_id = ?
+      AND tag_id = ?
+  `).run(journalId, tagId)
+
+  // 如果这个标签已经没有任何日记使用了，就删除标签本身
+  db.prepare(`
+    DELETE FROM tags
+    WHERE id = ?
+      AND NOT EXISTS (
+        SELECT 1
+        FROM journal_tags
+        WHERE tag_id = ?
+      )
+  `).run(tagId, tagId)
+
+  return result.changes > 0
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
@@ -282,4 +401,8 @@ module.exports = {
   permanentlyDeleteJournal,
   toggleFavorite,
   cleanupExpiredJournals,
+  getAllTags,
+  getJournalTags,
+  addTagToJournal,
+  removeTagFromJournal,
 }

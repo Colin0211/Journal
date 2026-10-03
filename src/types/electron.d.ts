@@ -59,6 +59,32 @@ declare global {
         success: boolean
         favorite?: boolean
       }>
+
+      // 获取所有标签
+      getAllTags(): Promise<{
+        id: number
+        name: string
+      }[]>
+
+      // 获取某篇日记的标签
+      getJournalTags(
+        journalId: number,
+      ): Promise<{
+        id: number
+        name: string
+      }[]>
+
+      // 给日记添加标签
+      addTagToJournal(
+        journalId: number,
+        tagName: string,
+      ): Promise<boolean>
+
+      // 从日记中移除标签
+      removeTagFromJournal(
+        journalId: number,
+        tagId: number,
+      ): Promise<boolean>
     }
   }
 }

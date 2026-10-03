@@ -44,4 +44,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleFavorite: (id) => {
     return ipcRenderer.invoke('journal:toggleFavorite', id)
   },
+
+  // 获取所有标签
+  getAllTags: () => {
+    return ipcRenderer.invoke('tag:list')
+  },
+
+  // 获取某篇日记的标签
+  getJournalTags: (journalId) => {
+    return ipcRenderer.invoke('journal:getTags', journalId)
+  },
+
+  // 给日记添加标签
+  addTagToJournal: (journalId, tagName) => {
+    return ipcRenderer.invoke(
+      'journal:addTag',
+      journalId,
+      tagName,
+    )
+  },
+
+  // 从日记中移除标签
+  removeTagFromJournal: (journalId, tagId) => {
+    return ipcRenderer.invoke(
+      'journal:removeTag',
+      journalId,
+      tagId,
+    )
+  },
 })
