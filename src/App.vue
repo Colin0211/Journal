@@ -27,9 +27,19 @@ const {
   filteredEntries,
   showFavoritesOnly,
   showDeletedOnly,
+  showTagsOnly,
   todayEntries,
   yesterdayEntries,
   olderEntries,
+
+  tags,
+  selectedTagId,
+  selectedTag,
+  tagsWithCount,
+
+  loadTags,
+  addTagToEntry,
+  removeTagFromEntry,
 } = useJournal()
 
 const editorRef = ref<InstanceType<typeof Editor> | null>(null)
@@ -61,10 +71,12 @@ const newEntry = async () => {
 
 // 处理过滤器变化
 const handleFilterChange = async (
-  type: 'all' | 'favorites' | 'deleted',
+  type: 'all' | 'favorites' | 'deleted' | 'tags',
 ) => {
   showFavoritesOnly.value = type === 'favorites'
   showDeletedOnly.value = type === 'deleted'
+  showTagsOnly.value = type === 'tags'
+  selectedTagId.value = null
 
   if (type === 'favorites') {
     selectedId.value = filteredEntries.value[0]?.id ?? null
@@ -80,7 +92,51 @@ const handleFilterChange = async (
     return
   }
 
+  if (type === 'tags') {
+    await loadTags()
+
+    // 标签列表视图：中间列表显示所有标签，编辑器显示空状态
+    selectedId.value = null
+
+    return
+  }
+
   selectedId.value = entries.value[0]?.id ?? null
+}
+
+// 选中某个标签，过滤出该标签下的日记
+const selectTag = (tagId: number) => {
+  selectedTagId.value = tagId
+
+  selectedId.value = filteredEntries.value[0]?.id ?? null
+}
+
+// 从具体标签返回标签列表
+const backToTags = () => {
+  selectedTagId.value = null
+  selectedId.value = null
+}
+
+// 给当前日记添加标签
+const handleAddTag = async (name: string) => {
+  const entry = selectedEntry.value
+
+  if (!entry) {
+    return
+  }
+
+  await addTagToEntry(entry.id, name)
+}
+
+// 从当前日记移除标签
+const handleRemoveTag = async (tagId: number) => {
+  const entry = selectedEntry.value
+
+  if (!entry) {
+    return
+  }
+
+  await removeTagFromEntry(entry.id, tagId)
 }
 
 // 处理键盘快捷键
@@ -109,6 +165,7 @@ useKeyboardShortcuts({
 //加载SQLite数据库
 onMounted(async () => {
   await loadEntries()
+  await loadTags()
 })
 </script>
 
@@ -117,19 +174,21 @@ onMounted(async () => {
 
     <!-- 侧边栏 -->
     <Sidebar :entry-count="entries.length" :show-favorites-only="showFavoritesOnly" :show-deleted-only="showDeletedOnly"
-      @new-entry="newEntry" @filter-change="handleFilterChange" />
+      :show-tags-only="showTagsOnly" @new-entry="newEntry" @filter-change="handleFilterChange" />
 
     <!-- 中间日记列表 -->
     <EntryList ref="entryListRef" :entries="entries" :selected-id="selectedId" :search-text="searchText"
       :today-entries="todayEntries" :yesterday-entries="yesterdayEntries" :older-entries="olderEntries"
       :filtered-entries="filteredEntries" :deleted-entries="deletedEntries" :show-deleted-only="showDeletedOnly"
-      :show-favorites-only="showFavoritesOnly" @update:search-text="searchText = $event" @select-entry="selectEntry"
-      @new-entry="newEntry" />
+      :show-favorites-only="showFavoritesOnly" :show-tags-only="showTagsOnly" :tags="tagsWithCount"
+      :selected-tag-id="selectedTagId" :selected-tag-name="selectedTag?.name ?? null" @update:search-text="searchText = $event"
+      @select-entry="selectEntry" @new-entry="newEntry" @select-tag="selectTag" @back-to-tags="backToTags" />
 
     <!-- 编辑器 -->
     <Editor ref="editorRef" :entry="selectedEntry" :is-deleted="showDeletedOnly" :is-favorites="showFavoritesOnly"
-      @toggle-favorite="toggleFavorite" @delete="deleteEntry" @restore="restoreEntry"
-      @permanently-delete="permanentlyDeleteEntry" @content-change="handleContentChange" @new-entry="newEntry" />
+      :is-tags="showTagsOnly" :all-tags="tags" @toggle-favorite="toggleFavorite" @delete="deleteEntry" @restore="restoreEntry"
+      @permanently-delete="permanentlyDeleteEntry" @content-change="handleContentChange" @new-entry="newEntry"
+      @add-tag="handleAddTag" @remove-tag="handleRemoveTag" />
   </div>
 </template>
 

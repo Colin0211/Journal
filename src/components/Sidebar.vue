@@ -3,13 +3,12 @@ defineProps<{
   entryCount: number
   showFavoritesOnly: boolean
   showDeletedOnly: boolean
+  showTagsOnly: boolean
 }>()
 
 const emit = defineEmits<{
   newEntry: []
-  testSQLite: []
-  testListSQLite: []
-  filterChange: [filter: 'all' | 'favorites' | 'deleted']
+  filterChange: [filter: 'all' | 'favorites' | 'deleted' | 'tags']
 }>()
 </script>
 
@@ -31,7 +30,7 @@ const emit = defineEmits<{
       </button>
 
       <nav class="side-navigation">
-        <button class="side-item" :class="{ active: !showFavoritesOnly && !showDeletedOnly }"
+        <button class="side-item" :class="{ active: !showFavoritesOnly && !showDeletedOnly && !showTagsOnly }"
           @click="emit('filterChange', 'all')">
           <span class="side-icon">▤</span>
           <span>所有日记</span>
@@ -44,7 +43,8 @@ const emit = defineEmits<{
           <span>收藏</span>
         </button>
 
-        <button class="side-item">
+        <button class="side-item" :class="{ active: showTagsOnly }"
+          @click="emit('filterChange', 'tags')">
           <span class="side-icon">⌑</span>
           <span>标签</span>
         </button>

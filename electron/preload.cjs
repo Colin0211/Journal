@@ -55,6 +55,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('journal:getTags', journalId)
   },
 
+  // 获取所有日记与标签的关联关系
+  listAllJournalTags: () => {
+    return ipcRenderer.invoke('tag:listJournalTags')
+  },
+
   // 给日记添加标签
   addTagToJournal: (journalId, tagName) => {
     return ipcRenderer.invoke(

@@ -1,5 +1,10 @@
 import { computed, ref } from 'vue'
 
+export interface Tag {
+    id: number
+    name: string
+}
+
 export interface JournalEntry {
     id: number
     title: string
@@ -8,6 +13,7 @@ export interface JournalEntry {
     updatedAt: number
     favorite: boolean
     deletedAt: number | null
+    tags: Tag[]
 }
 
 export function useJournal() {
@@ -15,10 +21,14 @@ export function useJournal() {
     const deletedEntries = ref<JournalEntry[]>([])
     const selectedId = ref<number | null>(null)
 
-
     const searchText = ref('')
     const showFavoritesOnly = ref(false)
     const showDeletedOnly = ref(false)
+    const showTagsOnly = ref(false)
+
+    // 标签相关状态
+    const tags = ref<Tag[]>([])
+    const selectedTagId = ref<number | null>(null)
 
     // 计算当前选中的日记条目
     const selectedEntry = computed(() => {
@@ -67,6 +77,13 @@ export function useJournal() {
             result = result.filter((entry) => entry.favorite)
         }
 
+        // 只显示包含选中标签的日记
+        if (selectedTagId.value !== null) {
+            result = result.filter((entry) =>
+                entry.tags.some((tag) => tag.id === selectedTagId.value),
+            )
+        }
+
         // 搜索
         if (!keyword) {
             return result
@@ -101,6 +118,24 @@ export function useJournal() {
         )
     })
 
+    // 当前选中的标签
+    const selectedTag = computed(() => {
+        return (
+            tags.value.find((tag) => tag.id === selectedTagId.value) ?? null
+        )
+    })
+
+    // 所有标签及其对应的日记数量
+    const tagsWithCount = computed(() => {
+        return tags.value.map((tag) => ({
+            id: tag.id,
+            name: tag.name,
+            count: entries.value.filter((entry) =>
+                entry.tags.some((t) => t.id === tag.id),
+            ).length,
+        }))
+    })
+
     // 将 SQLite 数据转换成 Vue 使用的 JournalEntry
     const convertJournal = (journal: {
         id: number
@@ -121,6 +156,7 @@ export function useJournal() {
             deletedAt: journal.deleted_at
                 ? new Date(journal.deleted_at).getTime()
                 : null,
+            tags: [],
         }
     }
 
@@ -129,7 +165,31 @@ export function useJournal() {
         try {
             const journals = await window.electronAPI.listJournals()
 
-            entries.value = journals.map(convertJournal)
+            // 一次性加载所有日记与标签的关联关系；
+            // 单独隔离，避免标签查询失败导致整个日记列表加载失败
+            let relations: {
+                journal_id: number
+                tag_id: number
+                name: string
+            }[] = []
+
+            try {
+                relations = await window.electronAPI.listAllJournalTags()
+            } catch (error) {
+                console.warn('加载标签关联失败（可能是主进程未重启）：', error)
+            }
+
+            const tagMap = new Map<number, Tag[]>()
+            for (const row of relations) {
+                const list = tagMap.get(row.journal_id) ?? []
+                list.push({ id: row.tag_id, name: row.name })
+                tagMap.set(row.journal_id, list)
+            }
+
+            entries.value = journals.map((journal) => ({
+                ...convertJournal(journal),
+                tags: tagMap.get(journal.id) ?? [],
+            }))
 
             selectedId.value = entries.value[0]?.id ?? null
 
@@ -151,6 +211,35 @@ export function useJournal() {
         }
     }
 
+    // 加载所有标签
+    const loadTags = async () => {
+        try {
+            tags.value = await window.electronAPI.getAllTags()
+        } catch (error) {
+            console.error('加载标签失败：', error)
+        }
+    }
+
+    // 加载某篇日记的标签，并同步到对应的 entry
+    const loadJournalTags = async (journalId: number): Promise<Tag[]> => {
+        try {
+            const tagList = await window.electronAPI.getJournalTags(journalId)
+
+            const entry =
+                entries.value.find((e) => e.id === journalId) ??
+                deletedEntries.value.find((e) => e.id === journalId)
+
+            if (entry) {
+                entry.tags = tagList
+            }
+
+            return tagList
+        } catch (error) {
+            console.error('加载日记标签失败：', error)
+            return []
+        }
+    }
+
     // 创建新的日记条目
     const createEntry = async (): Promise<JournalEntry> => {
         const journal = await window.electronAPI.createJournal({
@@ -166,6 +255,7 @@ export function useJournal() {
             updatedAt: new Date(journal.updated_at).getTime(),
             favorite: Boolean(journal.favorite),
             deletedAt: null,
+            tags: [],
         }
     }
 
@@ -177,15 +267,16 @@ export function useJournal() {
             return
         }
 
-        // 如果当前在收藏夹，记录当前日记在收藏列表中的位置
+        // 过滤视图（收藏或标签过滤）下，记录当前日记在过滤结果中的位置
         const currentId = current.id
 
-        const favoriteIndex = showFavoritesOnly.value
+        const isFilteredView = showFavoritesOnly.value || showTagsOnly.value
+
+        const filteredIndex = isFilteredView
             ? filteredEntries.value.findIndex(
                 (entry) => entry.id === currentId,
             )
             : -1
-
 
         // 先从 SQLite 删除
         try {
@@ -212,15 +303,15 @@ export function useJournal() {
             (entry) => entry.id !== current.id,
         )
 
-        // 当前在收藏夹
-        if (showFavoritesOnly.value) {
+        // 当前在过滤视图（收藏或标签）
+        if (isFilteredView) {
             const remainingEntries = filteredEntries.value
 
             if (remainingEntries.length === 0) {
                 selectedId.value = null
-            } else if (remainingEntries[favoriteIndex]) {
-                // 优先选择当前日记后面的下一篇收藏
-                selectedId.value = remainingEntries[favoriteIndex].id
+            } else if (remainingEntries[filteredIndex]) {
+                // 优先选择当前日记后面的下一篇
+                selectedId.value = remainingEntries[filteredIndex].id
             } else {
                 // 当前已经是最后一篇，选择上一篇
                 selectedId.value =
@@ -381,6 +472,76 @@ export function useJournal() {
         }
     }
 
+    // 给日记添加标签
+    const addTagToEntry = async (journalId: number, tagName: string) => {
+        try {
+            const tag = await window.electronAPI.addTagToJournal(
+                journalId,
+                tagName,
+            )
+
+            if (!tag) {
+                return false
+            }
+
+            // 本地直接更新当前日记的标签，确保 UI 立即刷新
+            const entry =
+                entries.value.find((e) => e.id === journalId) ??
+                deletedEntries.value.find((e) => e.id === journalId)
+
+            if (entry && !entry.tags.some((t) => t.id === tag.id)) {
+                entry.tags = [...entry.tags, tag]
+            }
+
+            // 刷新标签全列表（可能新建了标签）
+            await loadTags()
+
+            return true
+        } catch (error) {
+            console.error('添加标签失败：', error)
+            return false
+        }
+    }
+
+    // 从日记中移除标签
+    const removeTagFromEntry = async (journalId: number, tagId: number) => {
+        try {
+            const ok = await window.electronAPI.removeTagFromJournal(
+                journalId,
+                tagId,
+            )
+
+            if (!ok) {
+                return false
+            }
+
+            // 本地直接移除当前日记的标签，确保 UI 立即刷新
+            const entry =
+                entries.value.find((e) => e.id === journalId) ??
+                deletedEntries.value.find((e) => e.id === journalId)
+
+            if (entry) {
+                entry.tags = entry.tags.filter((t) => t.id !== tagId)
+            }
+
+            // 刷新标签全列表（无日记使用的标签会被后端删除）
+            await loadTags()
+
+            // 如果被移除的标签已经没有任何日记使用，标签会被删除，
+            // 此时清除当前选中状态
+            const stillExists = tags.value.some((tag) => tag.id === tagId)
+
+            if (selectedTagId.value === tagId && !stillExists) {
+                selectedTagId.value = null
+            }
+
+            return true
+        } catch (error) {
+            console.error('移除标签失败：', error)
+            return false
+        }
+    }
+
     // 更新日记条目
     const updateEntry = async (
         id: number,
@@ -465,9 +626,15 @@ export function useJournal() {
         filteredEntries,
         showFavoritesOnly,
         showDeletedOnly,
+        showTagsOnly,
         todayEntries,
         yesterdayEntries,
         olderEntries,
+
+        tags,
+        selectedTagId,
+        selectedTag,
+        tagsWithCount,
 
         loadEntries,
         createEntry,
@@ -479,5 +646,9 @@ export function useJournal() {
         handleContentChange,
         saveCurrentEntry,
         toggleFavorite,
+        loadTags,
+        loadJournalTags,
+        addTagToEntry,
+        removeTagFromEntry,
     }
 }

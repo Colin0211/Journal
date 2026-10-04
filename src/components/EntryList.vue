@@ -13,12 +13,22 @@ const props = defineProps<{
   filteredEntries: JournalEntry[]
   showFavoritesOnly: boolean
   showDeletedOnly: boolean
+  showTagsOnly: boolean
+  tags: {
+    id: number
+    name: string
+    count: number
+  }[]
+  selectedTagId: number | null
+  selectedTagName: string | null
 }>()
 
 const emit = defineEmits<{
   'update:searchText': [value: string]
   selectEntry: [id: number]
   newEntry: []
+  selectTag: [tagId: number]
+  backToTags: []
 }>()
 
 const formatListDate = (timestamp: number) => {
@@ -48,13 +58,15 @@ const getRemainingDays = (deletedAt: number) => {
 
 const searchInput = ref<HTMLInputElement | null>(null)
 
-const displayEntries = computed(() => {
-  if (props.showDeletedOnly) {
-    return props.deletedEntries
-  }
+// 标签视图：未选中具体标签，显示标签列表
+const showTagList = computed(
+  () => props.showTagsOnly && props.selectedTagId === null,
+)
 
-  return props.filteredEntries
-})
+// 标签视图：已选中具体标签，显示该标签下的日记
+const showTaggedEntries = computed(
+  () => props.showTagsOnly && props.selectedTagId !== null,
+)
 
 defineExpose({
   searchInput,
@@ -69,9 +81,13 @@ defineExpose({
           {{
             props.showDeletedOnly
               ? '最近删除'
-              : props.showFavoritesOnly
-                ? '收藏'
-                : '日记'
+              : showTagList
+                ? '标签'
+                : showTaggedEntries
+                  ? `#${props.selectedTagName}`
+                  : props.showFavoritesOnly
+                    ? '收藏'
+                    : '日记'
           }}
         </h1>
 
@@ -79,19 +95,24 @@ defineExpose({
           {{
             props.showDeletedOnly
               ? `${props.deletedEntries.length} 篇日记`
-              : props.showFavoritesOnly
-                ? `${props.filteredEntries.length} 篇收藏`
-                : `${entries.length} 篇日记`
+              : showTagList
+                ? `${props.tags.length} 个标签`
+                : showTaggedEntries
+                  ? `${props.filteredEntries.length} 篇日记`
+                  : props.showFavoritesOnly
+                    ? `${props.filteredEntries.length} 篇收藏`
+                    : `${entries.length} 篇日记`
           }}
         </div>
       </div>
 
-      <button v-if="!props.showDeletedOnly && !props.showFavoritesOnly" class="icon-button" title="新建日记" @click="emit('newEntry')">
+      <button v-if="!props.showDeletedOnly && !props.showFavoritesOnly && !props.showTagsOnly" class="icon-button"
+        title="新建日记" @click="emit('newEntry')">
         ＋
       </button>
     </header>
 
-    <div v-if="!props.showDeletedOnly" class="search-container">
+    <div v-if="!props.showDeletedOnly && !props.showTagsOnly" class="search-container">
       <div class="search-field">
         <span class="search-icon">⌕</span>
 
@@ -152,8 +173,31 @@ defineExpose({
         </div>
       </section>
 
+      <!-- 标签列表视图 -->
+      <section v-if="showTagList" class="tag-list">
+        <button v-for="tag in props.tags" :key="tag.id" class="tag-card"
+          @click="emit('selectTag', tag.id)">
+          <span class="tag-icon">#</span>
+          <span class="tag-name">{{ tag.name }}</span>
+          <span class="tag-count">{{ tag.count }}</span>
+        </button>
+
+        <div v-if="props.tags.length === 0" class="no-results">
+          <div class="no-results-icon">⌑</div>
+          <div>暂无标签</div>
+          <small>在日记编辑器中添加标签后会显示在这里</small>
+        </div>
+      </section>
+
+      <!-- 已选中具体标签：返回按钮 + 该标签下的日记 -->
+      <template v-if="showTaggedEntries">
+        <button class="tag-back" @click="emit('backToTags')">
+          ← 所有标签
+        </button>
+      </template>
+
       <!-- 今天 -->
-      <section v-if="!props.showDeletedOnly && todayEntries.length" class="entry-group">
+      <section v-if="!props.showDeletedOnly && !showTagList && todayEntries.length" class="entry-group">
         <div class="group-title">今天</div>
 
         <button v-for="entry in todayEntries" :key="entry.id" class="entry-card"
@@ -182,7 +226,7 @@ defineExpose({
       </section>
 
       <!-- 昨天 -->
-      <section v-if="!props.showDeletedOnly && yesterdayEntries.length" class="entry-group">
+      <section v-if="!props.showDeletedOnly && !showTagList && yesterdayEntries.length" class="entry-group">
         <div class="group-title">昨天</div>
 
         <button v-for="entry in yesterdayEntries" :key="entry.id" class="entry-card"
@@ -211,7 +255,7 @@ defineExpose({
       </section>
 
       <!-- 更早 -->
-      <section v-if="!props.showDeletedOnly && olderEntries.length" class="entry-group">
+      <section v-if="!props.showDeletedOnly && !showTagList && olderEntries.length" class="entry-group">
         <div class="group-title">更早</div>
 
         <button v-for="entry in olderEntries" :key="entry.id" class="entry-card"
@@ -239,9 +283,21 @@ defineExpose({
         </button>
       </section>
 
+      <!-- 选中标签下没有日记 -->
+      <div v-if="
+        showTaggedEntries &&
+        filteredEntries.length === 0
+      " class="no-results">
+        <div class="no-results-icon">#</div>
+        <div>该标签下暂无日记</div>
+        <small>给日记添加这个标签后就会显示在这里</small>
+      </div>
+
       <!-- 没有搜索结果 -->
       <div v-if="
         !props.showDeletedOnly &&
+        !showTagList &&
+        !showTaggedEntries &&
         filteredEntries.length === 0
       " class="no-results">
         <div class="no-results-icon">⌕</div>
@@ -431,6 +487,74 @@ defineExpose({
   line-height: 1.45;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ================================
+   标签视图
+================================ */
+
+.tag-back {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 8px 11px;
+  margin-bottom: 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6d6d72;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-back:hover {
+  background: #f5f5f7;
+}
+
+.tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tag-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-card:hover {
+  background: #f5f5f7;
+}
+
+.tag-icon {
+  width: 20px;
+  color: #8e8e93;
+  font-size: 15px;
+  text-align: center;
+}
+
+.tag-name {
+  flex: 1;
+  overflow: hidden;
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tag-count {
+  color: #999;
+  font-size: 11px;
 }
 
 /* ================================

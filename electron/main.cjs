@@ -15,6 +15,7 @@ const {
   cleanupExpiredJournals,
   getAllTags,
   getJournalTags,
+  getAllJournalTags,
   addTagToJournal,
   removeTagFromJournal
 } = require('./database.cjs')
@@ -134,6 +135,11 @@ ipcMain.handle('tag:list', () => {
 // 获取某篇日记的标签
 ipcMain.handle('journal:getTags', (_, journalId) => {
   return getJournalTags(journalId)
+})
+
+// 获取所有日记与标签的关联关系
+ipcMain.handle('tag:listJournalTags', () => {
+  return getAllJournalTags()
 })
 
 // 给日记添加标签

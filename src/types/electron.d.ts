@@ -74,11 +74,21 @@ declare global {
         name: string
       }[]>
 
+      // 获取所有日记与标签的关联关系
+      listAllJournalTags(): Promise<{
+        journal_id: number
+        tag_id: number
+        name: string
+      }[]>
+
       // 给日记添加标签
       addTagToJournal(
         journalId: number,
         tagName: string,
-      ): Promise<boolean>
+      ): Promise<{
+        id: number
+        name: string
+      } | null>
 
       // 从日记中移除标签
       removeTagFromJournal(

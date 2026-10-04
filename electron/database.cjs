@@ -79,9 +79,26 @@ function initDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT
     )
   `)
+
+  // 兼容旧版本数据库：检查 tags 表是否有 created_at 字段
+  const tagColumns = db.prepare(`PRAGMA table_info(tags)`).all()
+
+  const hasTagCreatedAt = tagColumns.some(
+    (column) => column.name === 'created_at',
+  )
+
+  if (!hasTagCreatedAt) {
+    db.exec(`
+      ALTER TABLE tags
+      ADD COLUMN created_at TEXT
+    `)
+
+    console.log('SQLite: added tags.created_at column')
+  }
 
   // 创建日记-标签关联表
   db.exec(`
@@ -323,34 +340,50 @@ function getJournalTags(journalId) {
   `).all(journalId)
 }
 
+// 一次性获取所有日记与标签的关联关系
+function getAllJournalTags() {
+  const db = getDatabase()
 
-// 给日记添加标签
+  return db.prepare(`
+    SELECT
+      journal_tags.journal_id,
+      tags.id AS tag_id,
+      tags.name
+    FROM journal_tags
+    INNER JOIN tags
+      ON tags.id = journal_tags.tag_id
+    ORDER BY tags.name ASC
+  `).all()
+}
+
+
+// 给日记添加标签，返回新建或已存在的标签对象
 function addTagToJournal(journalId, tagName) {
   const db = getDatabase()
 
   const name = tagName.trim()
 
   if (!name) {
-    return false
+    return null
   }
 
-  // 如果标签不存在，就创建
+  // 如果标签不存在，就创建（补上 created_at，兼容旧表 NOT NULL 约束）
   const insertTag = db.prepare(`
-    INSERT OR IGNORE INTO tags (name)
-    VALUES (?)
+    INSERT OR IGNORE INTO tags (name, created_at)
+    VALUES (?, ?)
   `)
 
-  insertTag.run(name)
+  insertTag.run(name, new Date().toISOString())
 
-  // 获取标签 ID
+  // 获取标签
   const tag = db.prepare(`
-    SELECT id
+    SELECT id, name
     FROM tags
     WHERE name = ?
   `).get(name)
 
   if (!tag) {
-    return false
+    return null
   }
 
   // 建立日记和标签之间的关系
@@ -362,7 +395,7 @@ function addTagToJournal(journalId, tagName) {
     VALUES (?, ?)
   `).run(journalId, tag.id)
 
-  return true
+  return tag
 }
 
 
@@ -403,6 +436,7 @@ module.exports = {
   cleanupExpiredJournals,
   getAllTags,
   getJournalTags,
+  getAllJournalTags,
   addTagToJournal,
   removeTagFromJournal,
 }
