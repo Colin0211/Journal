@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import TagIcon from './TagIcon.vue'
+import TrashIcon from './TrashIcon.vue'
+
 defineProps<{
   entryCount: number
   showFavoritesOnly: boolean
@@ -45,13 +48,13 @@ const emit = defineEmits<{
 
         <button class="side-item" :class="{ active: showTagsOnly }"
           @click="emit('filterChange', 'tags')">
-          <span class="side-icon">⌑</span>
+          <span class="side-icon"><TagIcon /></span>
           <span>标签</span>
         </button>
 
         <button class="side-item" :class="{ active: showDeletedOnly }"
           @click="emit('filterChange', 'deleted')">
-          <span class="side-icon">⌫</span>
+          <span class="side-icon"><TrashIcon /></span>
           <span>最近删除</span>
         </button>
       </nav>

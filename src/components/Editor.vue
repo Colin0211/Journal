@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import type { JournalEntry, Tag } from '../composables/useJournal'
+import TagIcon from './TagIcon.vue'
+import TrashIcon from './TrashIcon.vue'
 
 const props = defineProps<{
   entry: JournalEntry | null
@@ -147,11 +149,11 @@ const formatDeleteDate = (timestamp: number | null) => {
 
             <button class="toolbar-button" :class="{ active: showTagPanel }" title="添加标签"
               @click="toggleTagPanel">
-              ⌑
+              <TagIcon />
             </button>
 
             <button class="toolbar-button" title="删除" @click="emit('delete')">
-              ⌫
+              <TrashIcon />
             </button>
           </template>
 
@@ -162,7 +164,7 @@ const formatDeleteDate = (timestamp: number | null) => {
             </button>
 
             <button class="toolbar-button" title="永久删除" @click="emit('permanentlyDelete', props.entry.id)">
-              ⌫
+              <TrashIcon />
             </button>
           </template>
         </div>
@@ -250,7 +252,7 @@ const formatDeleteDate = (timestamp: number | null) => {
     <div v-else class="empty-editor">
       <!-- 最近删除为空 -->
       <template v-if="props.isDeleted">
-        <div class="empty-editor-icon">⌫</div>
+        <div class="empty-editor-icon"><TrashIcon /></div>
 
         <h2>最近删除为空</h2>
 
@@ -276,7 +278,7 @@ const formatDeleteDate = (timestamp: number | null) => {
 
       <!-- 标签视图空状态 -->
       <template v-else-if="props.isTags">
-        <div class="empty-editor-icon">⌑</div>
+        <div class="empty-editor-icon"><TagIcon /></div>
 
         <h2>标签</h2>
 
@@ -369,6 +371,9 @@ const formatDeleteDate = (timestamp: number | null) => {
 .toolbar-button {
   width: 34px;
   height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 8px;
   background: transparent;

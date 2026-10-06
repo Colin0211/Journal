@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { JournalEntry } from '../composables/useJournal'
+import TagIcon from './TagIcon.vue'
+import TrashIcon from './TrashIcon.vue'
 
 const props = defineProps<{
   entries: JournalEntry[]
@@ -167,7 +169,7 @@ defineExpose({
         </div>
 
         <div v-if="props.deletedEntries.length === 0" class="no-results">
-          <div class="no-results-icon">⌫</div>
+          <div class="no-results-icon"><TrashIcon /></div>
           <div>回收站为空</div>
           <small>删除的日记会在 30 天后自动永久删除</small>
         </div>
@@ -183,7 +185,7 @@ defineExpose({
         </button>
 
         <div v-if="props.tags.length === 0" class="no-results">
-          <div class="no-results-icon">⌑</div>
+          <div class="no-results-icon"><TagIcon /></div>
           <div>暂无标签</div>
           <small>在日记编辑器中添加标签后会显示在这里</small>
         </div>
