@@ -423,11 +423,117 @@ function removeTagFromJournal(journalId, tagId) {
   return result.changes > 0
 }
 
+// ================================
+// 数据导出 / 导入
+// ================================
+
+// 获取全部日记（包含回收站），用于数据导出
+function getAllJournalsWithDeleted() {
+  const db = getDatabase()
+
+  return db.prepare(`
+    SELECT
+      id,
+      title,
+      content,
+      created_at,
+      updated_at,
+      favorite,
+      deleted,
+      deleted_at
+    FROM journals
+    ORDER BY created_at ASC
+  `).all()
+}
+
+// 追加导入日记，返回成功导入的数量
+function importJournals(list) {
+  const db = getDatabase()
+
+  const insertJournal = db.prepare(`
+    INSERT INTO journals (
+      title,
+      content,
+      created_at,
+      updated_at,
+      favorite,
+      deleted,
+      deleted_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  const insertTag = db.prepare(`
+    INSERT OR IGNORE INTO tags (name, created_at)
+    VALUES (?, ?)
+  `)
+
+  const selectTag = db.prepare(`
+    SELECT id
+    FROM tags
+    WHERE name = ?
+  `)
+
+  const linkTag = db.prepare(`
+    INSERT OR IGNORE INTO journal_tags (
+      journal_id,
+      tag_id
+    )
+    VALUES (?, ?)
+  `)
+
+  const run = db.transaction((items) => {
+    const now = new Date().toISOString()
+
+    let count = 0
+
+    for (const item of items) {
+      const result = insertJournal.run(
+        item.title ?? '',
+        item.content ?? '',
+        item.created_at ?? now,
+        item.updated_at ?? now,
+        item.favorite ? 1 : 0,
+        item.deleted ? 1 : 0,
+        item.deleted_at ?? null,
+      )
+
+      const journalId = result.lastInsertRowid
+
+      const tagNames = Array.isArray(item.tags) ? item.tags : []
+
+      for (const rawName of tagNames) {
+        const name = String(rawName ?? '').trim()
+
+        if (!name) {
+          continue
+        }
+
+        insertTag.run(name, now)
+
+        const tag = selectTag.get(name)
+
+        if (tag) {
+          linkTag.run(journalId, tag.id)
+        }
+      }
+
+      count++
+    }
+
+    return count
+  })
+
+  return run(list)
+}
+
 module.exports = {
   initDatabase,
   getDatabase,
   getAllJournals,
   getDeletedJournals,
+  getAllJournalsWithDeleted,
+  importJournals,
   updateJournal,
   deleteJournal,
   restoreJournal,

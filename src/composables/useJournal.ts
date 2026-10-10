@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 export interface Tag {
     id: number
@@ -68,6 +68,11 @@ export function useJournal() {
     const filteredEntries = computed(() => {
         const keyword = searchText.value.trim().toLowerCase()
 
+        // 支持用 #标签 的形式搜索标签
+        const tagKeyword = keyword.startsWith('#')
+            ? keyword.slice(1)
+            : keyword
+
         let result = [...entries.value].sort(
             (a, b) => b.updatedAt - a.updatedAt,
         )
@@ -84,7 +89,7 @@ export function useJournal() {
             )
         }
 
-        // 搜索
+        // 搜索：标题、正文、标签
         if (!keyword) {
             return result
         }
@@ -92,10 +97,50 @@ export function useJournal() {
         return result.filter((entry) => {
             return (
                 entry.title.toLowerCase().includes(keyword) ||
-                entry.content.toLowerCase().includes(keyword)
+                entry.content.toLowerCase().includes(keyword) ||
+                entry.tags.some((tag) =>
+                    tag.name.toLowerCase().includes(tagKeyword),
+                )
             )
         })
     })
+
+    // 搜索或过滤条件变化时，保证编辑器与列表保持一致：
+    // 当前日记仍符合条件就保持不动，否则自动切到第一条结果。
+    // 只监听筛选条件（不监听 filteredEntries），
+    // 避免用户正在编辑正文时被"切换走"。
+    watch(
+        [
+            searchText,
+            showFavoritesOnly,
+            showDeletedOnly,
+            showTagsOnly,
+            selectedTagId,
+        ],
+        () => {
+            // 回收站使用独立列表
+            if (showDeletedOnly.value) {
+                return
+            }
+
+            // 标签列表视图（未选中具体标签）刻意不选中任何日记
+            if (showTagsOnly.value && selectedTagId.value === null) {
+                return
+            }
+
+            const list = filteredEntries.value
+
+            const stillVisible =
+                selectedId.value !== null &&
+                list.some((entry) => entry.id === selectedId.value)
+
+            if (stillVisible) {
+                return
+            }
+
+            selectedId.value = list[0]?.id ?? null
+        },
+    )
 
     // 今天
     const todayEntries = computed(() => {
@@ -576,8 +621,36 @@ export function useJournal() {
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null
 
+    // 记录哪篇日记还有未落盘的改动。
+    // 不依赖"当前选中项"，避免切换日记后把改动写到错误的日记上。
+    let pendingEntryId: number | null = null
+
+    // 立即写入待保存的改动
+    const flushPendingSave = async () => {
+        if (saveTimer) {
+            clearTimeout(saveTimer)
+            saveTimer = null
+        }
+
+        if (pendingEntryId === null) {
+            return
+        }
+
+        const id = pendingEntryId
+        pendingEntryId = null
+
+        const entry = entries.value.find((item) => item.id === id)
+
+        if (entry) {
+            await updateEntry(entry.id, entry.title, entry.content)
+        }
+    }
+
     // 保存当前选中的日记条目
     const saveCurrentEntry = async () => {
+        // 先把挂起的改动落盘，再保存当前条目
+        await flushPendingSave()
+
         const entry = selectedEntry.value
 
         if (!entry) {
@@ -598,7 +671,7 @@ export function useJournal() {
         }
 
         saveTimer = setTimeout(() => {
-            saveCurrentEntry()
+            flushPendingSave()
         }, 500)
     }
 
@@ -611,6 +684,7 @@ export function useJournal() {
         }
 
         entry.updatedAt = Date.now()
+        pendingEntryId = entry.id
 
         scheduleSave()
     }

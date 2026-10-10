@@ -4,6 +4,7 @@ import { useJournal } from './composables/useJournal'
 import Editor from './components/Editor.vue'
 import Sidebar from './components/Sidebar.vue'
 import EntryList from './components/EntryList.vue'
+import DataPanel from './components/DataPanel.vue'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 
 const {
@@ -24,6 +25,7 @@ const {
   handleContentChange,
   saveCurrentEntry,
   toggleFavorite,
+  searchText,
   filteredEntries,
   showFavoritesOnly,
   showDeletedOnly,
@@ -44,11 +46,11 @@ const {
 
 const editorRef = ref<InstanceType<typeof Editor> | null>(null)
 
-// 搜索关键词
-const searchText = ref('')
-
 //EntryList 组件引用
 const entryListRef = ref<InstanceType<typeof EntryList> | null>(null)
+
+// 数据与备份面板
+const showSettings = ref(false)
 
 // 选择某篇日记
 const selectEntry = async (id: number) => {
@@ -59,6 +61,9 @@ const selectEntry = async (id: number) => {
 
 // 新建日记
 const newEntry = async () => {
+  // 清空搜索，保证新建的日记一定可见
+  searchText.value = ''
+
   const entry = await createEntry()
 
   entries.value.unshift(entry)
@@ -77,6 +82,11 @@ const handleFilterChange = async (
   showDeletedOnly.value = type === 'deleted'
   showTagsOnly.value = type === 'tags'
   selectedTagId.value = null
+
+  // 回收站与标签视图没有搜索框，清空搜索避免"看不见的过滤"
+  if (type === 'deleted' || type === 'tags') {
+    searchText.value = ''
+  }
 
   if (type === 'favorites') {
     selectedId.value = filteredEntries.value[0]?.id ?? null
@@ -139,6 +149,12 @@ const handleRemoveTag = async (tagId: number) => {
   await removeTagFromEntry(entry.id, tagId)
 }
 
+// 导入备份后重新加载数据
+const handleImported = async () => {
+  await loadEntries()
+  await loadTags()
+}
+
 // 处理键盘快捷键
 useKeyboardShortcuts({
   onNewEntry: newEntry,
@@ -174,7 +190,8 @@ onMounted(async () => {
 
     <!-- 侧边栏 -->
     <Sidebar :entry-count="entries.length" :show-favorites-only="showFavoritesOnly" :show-deleted-only="showDeletedOnly"
-      :show-tags-only="showTagsOnly" @new-entry="newEntry" @filter-change="handleFilterChange" />
+      :show-tags-only="showTagsOnly" @new-entry="newEntry" @filter-change="handleFilterChange"
+      @open-settings="showSettings = true" />
 
     <!-- 中间日记列表 -->
     <EntryList ref="entryListRef" :entries="entries" :selected-id="selectedId" :search-text="searchText"
@@ -186,9 +203,13 @@ onMounted(async () => {
 
     <!-- 编辑器 -->
     <Editor ref="editorRef" :entry="selectedEntry" :is-deleted="showDeletedOnly" :is-favorites="showFavoritesOnly"
-      :is-tags="showTagsOnly" :all-tags="tags" @toggle-favorite="toggleFavorite" @delete="deleteEntry" @restore="restoreEntry"
+      :is-tags="showTagsOnly" :is-searching="searchText.trim().length > 0" :all-tags="tags"
+      @toggle-favorite="toggleFavorite" @delete="deleteEntry" @restore="restoreEntry"
       @permanently-delete="permanentlyDeleteEntry" @content-change="handleContentChange" @new-entry="newEntry"
       @add-tag="handleAddTag" @remove-tag="handleRemoveTag" />
+
+    <!-- 数据与备份面板 -->
+    <DataPanel v-if="showSettings" @close="showSettings = false" @imported="handleImported" />
   </div>
 </template>
 

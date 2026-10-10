@@ -118,7 +118,7 @@ defineExpose({
       <div class="search-field">
         <span class="search-icon">⌕</span>
 
-        <input ref="searchInput" :value="searchText" type="text" placeholder="搜索" @input="
+        <input ref="searchInput" :value="searchText" type="text" placeholder="搜索标题、正文、标签" @input="
           emit(
             'update:searchText',
             ($event.target as HTMLInputElement).value,

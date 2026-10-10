@@ -95,6 +95,40 @@ declare global {
         journalId: number,
         tagId: number,
       ): Promise<boolean>
+
+      // 导出为 Markdown
+      exportMarkdown(): Promise<{
+        success: boolean
+        canceled?: boolean
+        count?: number
+        dir?: string
+        error?: string
+      }>
+
+      // 导出 JSON 备份
+      exportJson(): Promise<{
+        success: boolean
+        canceled?: boolean
+        count?: number
+        file?: string
+        error?: string
+      }>
+
+      // 从 JSON 备份导入
+      importJson(): Promise<{
+        success: boolean
+        canceled?: boolean
+        count?: number
+        error?: string
+      }>
+
+      // 备份数据库文件
+      backupDatabase(): Promise<{
+        success: boolean
+        canceled?: boolean
+        file?: string
+        error?: string
+      }>
     }
   }
 }

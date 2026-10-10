@@ -77,4 +77,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       tagId,
     )
   },
+
+  // 导出为 Markdown
+  exportMarkdown: () => {
+    return ipcRenderer.invoke('data:exportMarkdown')
+  },
+
+  // 导出 JSON 备份
+  exportJson: () => {
+    return ipcRenderer.invoke('data:exportJson')
+  },
+
+  // 从 JSON 备份导入
+  importJson: () => {
+    return ipcRenderer.invoke('data:importJson')
+  },
+
+  // 备份数据库文件
+  backupDatabase: () => {
+    return ipcRenderer.invoke('data:backupDatabase')
+  },
 })

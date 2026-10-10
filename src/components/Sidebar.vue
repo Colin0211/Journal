@@ -11,6 +11,7 @@ defineProps<{
 
 const emit = defineEmits<{
   newEntry: []
+  openSettings: []
   filterChange: [filter: 'all' | 'favorites' | 'deleted' | 'tags']
 }>()
 </script>
@@ -60,7 +61,7 @@ const emit = defineEmits<{
       </nav>
     </div>
     <div class="sidebar-bottom">
-      <button class="side-item">
+      <button class="side-item" @click="emit('openSettings')">
         <span class="side-icon">⚙</span>
         <span>设置</span>
       </button>

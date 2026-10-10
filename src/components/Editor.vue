@@ -9,6 +9,7 @@ const props = defineProps<{
   isFavorites: boolean
   isDeleted: boolean
   isTags: boolean
+  isSearching: boolean
   allTags: Tag[]
 }>()
 
@@ -260,6 +261,19 @@ const formatDeleteDate = (timestamp: number | null) => {
           被删除的日记会显示在这里，
           <br />
           并在 30 天后自动永久删除。
+        </p>
+      </template>
+
+      <!-- 搜索无结果 -->
+      <template v-else-if="props.isSearching">
+        <div class="empty-editor-icon">⌕</div>
+
+        <h2>没有找到日记</h2>
+
+        <p>
+          没有符合当前关键词的日记，
+          <br />
+          试试其他关键词。
         </p>
       </template>
 
